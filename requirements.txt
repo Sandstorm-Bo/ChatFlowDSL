@@ -1,0 +1,6 @@
+pyyaml
+langdetect
+openai
+dashscope
+rich
+pytest

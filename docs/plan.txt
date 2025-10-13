@@ -1,0 +1,267 @@
+
+一、项目概述
+------------
+项目名称：ChatFlowDSL
+项目类型：智能客服脚本语言与解释器
+开发目标：
+    设计并实现一个用于描述智能客服应答逻辑的领域特定语言（DSL），
+    能够基于规则自动应答，同时结合大语言模型（LLM）实现意图识别。
+    在基础版实现核心功能的基础上，进一步实现：
+    - 多语言选择
+    - 模式选择（规则 / LLM / 混合）
+    - 对话记忆机制
+    - 多线程并发会话
+
+------------------------------------------------------------
+
+二、基础版设计
+-----------------------------
+
+1. 系统功能目标
+    - 实现一个可描述客服自动应答逻辑的脚本语言；
+    - 能解析并执行该DSL；
+    - 能调用开放API的大语言模型进行意图识别；
+    - 命令行交互界面；
+    - 提供若干业务脚本样例。
+
+2. 系统模块结构
+    - DSL解析模块：解析DSL脚本，构建规则树。
+    - 解释执行模块：根据意图执行相应逻辑。
+    - LLM意图识别模块：调用OpenAI或Qwen接口。
+    - CLI交互模块：接受输入并输出应答。
+    - 测试模块：实现测试桩与测试脚本。
+
+3. 功能流程
+    用户输入 → LLM识别意图 → 解释器匹配规则 → 执行应答 → 输出结果
+
+4. DSL设计语法（基础版）
+    格式采用YAML风格：
+    ```yaml
+    intent: refund
+    condition:
+      match: "商品损坏"
+    response:
+      text: "请上传商品照片，我们会尽快处理退货。"
+      next: ask_refund_method
+    ```
+
+5. 模块划分
+    - dsl_parser.py：DSL解析
+    - interpreter.py：规则执行
+    - llm_recognizer.py：意图识别
+    - cli_interface.py：命令行界面
+    - test_interpreter.py：测试脚本
+
+6. 基础目录结构
+    ```
+    ChatFlowDSL/
+    ├── main.py
+    ├── dsl/
+    │   ├── dsl_parser.py
+    │   ├── interpreter.py
+    │   └── examples/
+    │       ├── refund.yaml
+    │       ├── logistics.yaml
+    │
+    ├── llm/
+    │   ├── llm_recognizer.py
+    │   └── prompt_templates.py
+    │
+    ├── cli/
+    │   └── cli_interface.py
+    │
+    ├── tests/
+    │   └── test_interpreter.py
+    │
+    ├── docs/
+    │   ├── 设计文档.pdf
+    │   ├── DSL脚本说明.md
+    │   └── 测试报告.md
+    └── demo/
+        └── demo_video.mp4
+    ```
+
+7. 测试内容
+    - 输入意图命中测试；
+    - LLM识别正确性；
+    - 脚本逻辑执行测试；
+    - 终端交互与输出稳定性。
+
+------------------------------------------------------------
+
+三、增强版设计
+-------------------------------
+
+1. 增强目标
+    在基础版本上增加：
+    - 多语言支持（Language Selector）
+    - 模式选择机制（Mode Selector）
+    - 上下文记忆（Dialog Memory）
+    - 多线程并发（Session Manager）
+
+2. 系统架构
+    ```
+    用户输入
+       ↓
+    语言选择(LanguageSelector)
+       ↓
+    模式选择(ModeSelector)
+       ↓
+    ┌───────────────┬─────────────────┐
+    │ 规则解释器    │   LLM生成模块   │
+    └───────────────┴─────────────────┘
+       ↓
+    对话记忆管理(MemoryManager)
+       ↓
+    输出响应
+       ↓
+    并发会话调度(SessionManager)
+    ```
+
+3. 模块说明
+    - language_selector.py：检测输入语言，选择脚本。
+    - mode_selector.py：确定当前执行模式（rule/llm/hybrid）。
+    - memory_manager.py：保存上下文对话，支持连续会话。
+    - session_manager.py：多线程管理多个用户会话。
+    - hybrid_engine.py：在混合模式下融合规则和LLM结果。
+    - logger.py：多线程日志输出。
+
+4. 增强DSL设计
+    ```yaml
+    intent: refund
+    language: zh
+    confidence_threshold: 0.85
+    response:
+      text: "请上传商品照片，我们会尽快处理退货。"
+      next: ask_refund_method
+
+    intent: inquiry
+    language: en
+    llm: true
+    response:
+      text: "Your package is currently in ${city}."
+    ```
+
+5. 模式说明
+    - RULE_ONLY：完全依据DSL执行；
+    - LLM_ONLY：完全由大模型生成；
+    - HYBRID：根据置信度阈值决定。
+
+6. 对话记忆机制
+    - 每个用户会话独立保存最近N轮对话；
+    - 对LLM调用时附带历史上下文；
+    - 命令 `/clear` 可清空记忆。
+
+7. 多线程机制
+    - 使用 `ThreadPoolExecutor`；
+    - 每个线程绑定session_id；
+    - 每个会话独立的上下文与日志；
+    - 模拟并发用户对话。
+
+8. 项目目录（增强版）
+    ```
+    ChatFlowDSL/
+    ├── main.py
+    ├── config/
+    │   └── config.yaml
+    ├── dsl/
+    │   ├── dsl_parser.py
+    │   ├── interpreter.py
+    │   └── examples/
+    │       ├── refund_en.yaml
+    │       ├── refund_zh.yaml
+    │
+    ├── llm/
+    │   ├── llm_responder.py
+    │   ├── hybrid_engine.py
+    │   └── prompt_templates.py
+    │
+    ├── core/
+    │   ├── language_selector.py
+    │   ├── mode_selector.py
+    │   ├── memory_manager.py
+    │   ├── session_manager.py
+    │   └── logger.py
+    │
+    ├── cli/
+    │   ├── cli_interface.py
+    │   └── ui_utils.py
+    │
+    ├── tests/
+    │   ├── test_interpreter.py
+    │   ├── test_llm_responder.py
+    │   ├── test_multithread.py
+    │   └── auto_test.sh
+    │
+    ├── docs/
+    │   ├── 设计文档.pdf
+    │   ├── DSL脚本说明.md
+    │   ├── 测试报告.md
+    │   └── 创新设计说明.md
+    │
+    └── demo/
+        ├── demo_video.mp4
+        ├── demo_conversation.log
+        └── performance_test.log
+    ```
+
+9. 创新亮点总结
+    1. 多语言：支持自动检测与脚本分支。
+    2. 模式切换：可动态选择三种执行策略。
+    3. 对话记忆：支持多轮上下文。
+    4. 多线程：实现多用户并发对话。
+    5. 混合引擎：融合规则与大模型应答。
+    6. 可扩展：模块化结构便于新增语言或脚本。
+
+10. 测试方案
+    - 单元测试：DSL、LLM、混合逻辑、记忆模块；
+    - 多线程测试：并发稳定性；
+    - 多语言测试：自动检测与输出验证；
+    - 性能测试：并发延迟对比；
+    - 回归测试：脚本修改一致性。
+
+------------------------------------------------------------
+
+四、时间规划
+-------------
+第1阶段：DSL语法与解释器实现（第1周）  
+第2阶段：LLM意图识别集成（第2周）  
+第3阶段：语言/模式选择模块实现（第3周）  
+第4阶段：记忆机制与多线程调度（第4周）  
+第5阶段：测试、优化与文档撰写（第5~6周）
+
+------------------------------------------------------------
+
+五、运行环境与依赖
+------------------
+Python版本：3.10+
+依赖库：
+    pyyaml
+    langdetect
+    openai 或 dashscope
+    colorama / rich
+    concurrent.futures
+    pytest
+操作系统：Windows / Linux / macOS
+开发工具：VSCode / PyCharm
+版本管理：Git
+
+------------------------------------------------------------
+
+六、预期成果
+--------------
+1. 能正确解析并执行DSL脚本；
+2. 能识别用户意图并调用LLM；
+3. 能根据语言选择加载对应脚本；
+4. 能根据模式切换执行策略；
+5. 支持多轮记忆与多线程对话；
+6. 提供完整文档、测试与演示视频。
+
+------------------------------------------------------------
+
+七、总结
+--------
+ChatFlowDSL 实现了规则驱动的智能客服DSL解释器，
+ChatFlowDSL++ 在此基础上融合了多语言、多模式、记忆与并发特性，
+展示了从课程作业到工程原型的完整设计思路，
+体现了现代软件系统中“规则与智能融合”的工程与创新价值。

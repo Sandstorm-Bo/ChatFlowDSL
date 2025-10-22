@@ -1,0 +1,108 @@
+name: "发票服务流程"
+entry_point: "state_start_invoice"
+
+states:
+  - id: "state_start_invoice"
+    triggers:
+      - type: regex
+        value: ".*(发票|invoice).*"
+    actions:
+      - type: respond
+        text: "您好，需要为您申请开具发票吗？请提供需要开票的订单号。"
+    transitions:
+      - target: "state_collect_order_number"
+
+  - id: "state_collect_order_number"
+    actions:
+      - type: wait_for_input
+    transitions:
+      - condition:
+          all:
+            - type: regex
+              value: "[A-Z0-9]{10,}"
+        target: "state_verify_order_for_invoice"
+      - target: "state_invalid_order_format"
+
+  - id: "state_invalid_order_format"
+    actions:
+      - type: respond
+        text: "您输入的订单号格式不正确，请重新输入。"
+    transitions:
+      - target: "state_collect_order_number"
+
+  - id: "state_verify_order_for_invoice"
+    actions:
+      - type: extract_variable
+        source: user_input
+        regex: "(?P<order_id>[A-Z0-9]{10,})"
+        target: "session.order_id"
+      - type: api_call
+        method: GET
+        url: "https://api.my-shop.com/orders/{{session.order_id}}/invoice_check"
+        save_to: "session.invoice_check"
+    transitions:
+      - condition:
+          # 假设API返回: {"eligible": true, "message": "..."}
+          all:
+            - type: variable_equals
+              variable: "session.invoice_check.eligible"
+              value: true
+        target: "state_collect_invoice_info"
+      - target: "state_invoice_not_eligible"
+
+  - id: "state_invoice_not_eligible"
+    actions:
+      - type: respond
+        text: "抱歉，根据查询，您的订单 {{session.order_id}} 因“{{session.invoice_check.message}}”无法开具发票。"
+    transitions:
+      - target: "state_end_invoice"
+
+  - id: "state_collect_invoice_info"
+    actions:
+      - type: respond
+        text: "请提供发票抬头和税号，格式为：抬头:XXX, 税号:XXX"
+    transitions:
+      - target: "state_process_invoice_request"
+
+  - id: "state_process_invoice_request"
+    actions:
+      - type: wait_for_input
+    transitions:
+      - condition:
+          all:
+            - type: regex
+              # 简单的正则，实际应更严格
+              value: ".*(抬头|title).*(税号|tax).*"
+        target: "state_submit_invoice_request"
+      - target: "state_invalid_invoice_info"
+  
+  - id: "state_invalid_invoice_info"
+    actions:
+      - type: respond
+        text: "您提供的发票信息格式不正确，请按“抬头:XXX, 税号:XXX”的格式提供。"
+    transitions:
+      - target: "state_process_invoice_request"
+
+  - id: "state_submit_invoice_request"
+    actions:
+      - type: extract_variable
+        source: user_input
+        regex: "抬头:(?P<title>.*),.*税号:(?P<tax_id>.*)"
+        target: "session.invoice_info" # 会存成一个字典
+      - type: api_call
+        method: POST
+        url: "https://api.my-shop.com/invoices"
+        payload:
+          order_id: "{{session.order_id}}"
+          title: "{{session.invoice_info.title}}"
+          tax_id: "{{session.invoice_info.tax_id}}"
+        save_to: "session.invoice_result"
+      - type: respond
+        text: "您的发票申请已提交，预计处理时间为24小时。申请结果：{{session.invoice_result.message}}。"
+    transitions:
+      - target: "state_end_invoice"
+
+  - id: "state_end_invoice"
+    actions:
+      - type: respond
+        text: "感谢您的咨询。"

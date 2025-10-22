@@ -1,0 +1,90 @@
+name: "售前产品咨询流程"
+entry_point: "state_start_inquiry"
+
+states:
+  - id: "state_start_inquiry"
+    triggers:
+      - type: regex
+        value: ".*(了解|介绍|咨询一下).*(产品|商品).*"
+    actions:
+      # 1. 先调用API获取主推产品列表
+      - type: api_call
+        method: GET
+        url: "https://api.my-shop.com/products/featured" # API返回如: [{"id": "headset_001", "name": "智能降噪耳机"}, ...]
+        save_to: "session.featured_products"
+      # 2. 动态生成欢迎语
+      - type: respond
+        # ActionExecutor需要支持从列表变量生成文本, 这里我们先定义好期望的行为
+        text: "您好！我们目前主要有 {{session.featured_products_names}}，请问您对哪款产品感兴趣？"
+    transitions:
+      - target: "state_collect_product_choice"
+
+  - id: "state_collect_product_choice"
+    actions:
+      - type: wait_for_input
+    transitions:
+      # 这里为了简化，我们仍然使用正则匹配关键词。
+      # 更高级的实现中，这里的匹配逻辑也可以由API返回的数据动态生成。
+      - condition:
+          all:
+            - type: regex
+              value: ".*(耳机|earphone).*"
+        target: "state_introduce_headset"
+      - condition:
+          all:
+            - type: regex
+              value: ".*(移动电源|充电宝|power bank).*"
+        target: "state_introduce_powerbank"
+      - target: "state_product_not_found"
+
+  - id: "state_introduce_headset"
+    actions:
+      - type: api_call
+        method: GET
+        url: "https://api.my-shop.com/products/headset_001"
+        save_to: "session.product_details"
+      - type: respond
+        text: |
+          我们的“智能降噪耳机”信息如下：
+          {{session.product_details.description}}
+          当前售价为 {{session.product_details.price}} 元。
+          您需要了解更多详情，还是直接购买呢？
+    transitions:
+      - condition:
+          all:
+            - type: regex
+              value: ".*(购买|下单|buy).*"
+        target: "state_start_purchase_flow"
+      - target: "state_end_inquiry"
+
+  - id: "state_introduce_powerbank"
+    actions:
+      - type: api_call
+        method: GET
+        url: "https://api.my-shop.com/products/powerbank_002"
+        save_to: "session.product_details"
+      - type: respond
+        text: |
+          我们的“超长续航移动电源”信息如下：
+          {{session.product_details.description}}
+          当前售价为 {{session.product_details.price}} 元。
+          您需要了解更多详情，还是直接购买呢？
+    transitions:
+      - condition:
+          all:
+            - type: regex
+              value: ".*(购买|下单|buy).*"
+        target: "state_start_purchase_flow"
+      - target: "state_end_inquiry"
+
+  - id: "state_product_not_found"
+    actions:
+      - type: respond
+        text: "抱歉，我们暂时没有您提到的这款产品。您可以从我们主推的产品中选择一款进行了解。"
+    transitions:
+      - target: "state_collect_product_choice"
+
+  - id: "state_end_inquiry"
+    actions:
+      - type: respond
+        text: "好的，如果您还有其他问题，随时可以问我。祝您购物愉快！"

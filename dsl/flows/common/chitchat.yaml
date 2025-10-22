@@ -1,0 +1,17 @@
+name: "通用闲聊流程"
+entry_point: "state_start_chitchat"
+
+states:
+  - id: "state_start_chitchat"
+    triggers:
+      - type: regex
+        value: "^(你好|您好|hi|hello)$"
+    actions:
+      - type: respond
+        text: "您好！有什么可以为您效劳的吗？"
+    transitions:
+      # 闲聊一般是“一轮”结束，等待用户开启具体业务
+      - target: "state_end_chitchat"
+
+  - id: "state_end_chitchat"
+    actions: [] # No action, just a logical end point

@@ -1,0 +1,99 @@
+name: "标准退款流程"
+entry_point: "state_start_refund"
+
+states:
+  - id: "state_start_refund"
+    triggers:
+      - type: regex
+        value: ".*(退款|退货).*"
+    actions:
+      - type: respond
+        text: "您好，请问您是想申请退款吗？请您简单描述一下退款原因，比如“商品有损坏”或“七天无理由”。"
+    transitions:
+      - target: "state_collect_reason"
+
+  - id: "state_collect_reason"
+    actions:
+      - type: wait_for_input
+    transitions:
+      - condition:
+          all:
+            - type: regex
+              value: ".*(损坏|坏了|质量|问题).*"
+        target: "state_quality_issue"
+      - condition:
+          any:
+            - type: regex
+              value: ".*(不喜欢|不想要|七天无理由).*"
+        target: "state_no_reason_return"
+      - target: "state_fallback_reason"
+
+  - id: "state_quality_issue"
+    actions:
+      - type: set_variable
+        scope: session
+        key: "refund_reason_type"
+        value: "quality_issue"
+      - type: respond
+        text: "非常抱歉给您带来不好的体验。请您提供一下订单号，我为您查询一下是否可以进入售后流程。"
+    transitions:
+      - target: "state_collect_order_number"
+
+  - id: "state_no_reason_return"
+    actions:
+      - type: set_variable
+        scope: session
+        key: "refund_reason_type"
+        value: "no_reason"
+      - type: respond
+        text: "好的，七天无理由退货需要确保商品完好且配件齐全。请您提供订单号，我为您办理。"
+    transitions:
+      - target: "state_collect_order_number"
+      
+  - id: "state_collect_order_number"
+    actions:
+      - type: wait_for_input
+    transitions:
+      - condition:
+          all:
+            - type: regex
+              value: "[A-Z0-9]{10,}"
+        target: "state_verify_order_for_refund"
+      - target: "state_invalid_order_format"
+  
+  - id: "state_invalid_order_format"
+    actions:
+      - type: respond
+        text: "您输入的订单号格式好像不太对哦，麻烦您再检查一下呢。"
+    transitions:
+      - target: "state_collect_order_number"
+
+  - id: "state_verify_order_for_refund"
+    actions:
+      - type: extract_variable
+        source: user_input
+        regex: "(?P<order_id>[A-Z0-9]{10,})"
+        target: "session.order_id"
+      - type: api_call
+        method: POST
+        url: "https://api.my-shop.com/refund/check"
+        payload:
+            order_id: "{{session.order_id}}"
+            reason: "{{session.refund_reason_type}}"
+        save_to: "session.refund_check_result"
+      - type: respond
+        text: "您的订单 {{session.order_id}} 状态已收到。{{session.refund_check_result.message}}"
+    transitions:
+      - target: "state_end_refund"
+      
+  - id: "state_fallback_reason"
+    actions:
+      - type: respond
+        text: "抱歉，我不太理解您的退款原因，可以换个说法吗？或者您可以选择转接人工服务。"
+    transitions:
+      - target: "state_collect_reason"
+
+  - id: "state_end_refund"
+    actions:
+      - type: respond
+        text: "感谢您的咨询，再见！"

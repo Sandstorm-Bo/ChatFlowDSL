@@ -1,0 +1,101 @@
+name: "耳机故障排查流程"
+entry_point: "state_start_troubleshooting"
+
+states:
+  - id: "state_start_troubleshooting"
+    triggers:
+      - type: regex
+        value: ".*(耳机|headset).*(连不上|没声音|坏了|问题).*"
+    actions:
+      - type: respond
+        text: "很抱歉您的耳机遇到了问题。为了帮您定位问题，请问耳机开机后，指示灯是否正常闪烁？"
+    transitions:
+      - target: "state_check_indicator_light"
+
+  - id: "state_check_indicator_light"
+    actions:
+      - type: wait_for_input
+    transitions:
+      - condition:
+          all:
+            - type: regex
+              value: ".*(是|闪|亮|正常).*"
+        target: "state_check_device_bluetooth"
+      - condition:
+          all:
+            - type: regex
+              value: ".*(否|不闪|不亮|没反应).*"
+        target: "state_suggest_charging"
+      - target: "state_fallback_options"
+
+  - id: "state_suggest_charging"
+    actions:
+      - type: respond
+        text: "耳机可能电量不足，建议您使用原装充电线充电30分钟以上再尝试。如果问题依旧，您可以随时回复【申请售后】为您处理。"
+    transitions:
+      - condition:
+          all:
+            - type: regex
+              value: ".*(申请售后|退货).*"
+        # 流程联动：跳转到退款/售后流程的入口
+        target: "state_start_refund"
+      - target: "state_end_troubleshooting"
+
+  - id: "state_check_device_bluetooth"
+    actions:
+      - type: respond
+        text: "好的。请您检查一下您手机的蓝牙是否已经开启？另外，如果之前配对过，请在蓝牙设置中找到这个耳机设备，选择“忽略此设备”或“取消配对”，然后再重新搜索配对试试。"
+    transitions:
+      - target: "state_confirm_re_pairing"
+
+  - id: "state_confirm_re_pairing"
+    actions:
+      - type: wait_for_input
+    transitions:
+      - condition:
+          all:
+            - type: regex
+              value: ".*(好了|可以了|解决了).*"
+        target: "state_issue_resolved"
+      - condition:
+          all:
+            - type: regex
+              value: ".*(还是不行|没用|依旧).*"
+        target: "state_suggest_after_sales"
+
+  - id: "state_suggest_after_sales"
+    actions:
+      - type: respond
+        text: "非常抱歉，如果这些步骤仍未解决您的问题，可能需要专业的售后检测。您可以回复【申请售后】，我将为您启动售后服务流程。"
+    transitions:
+      - condition:
+          all:
+            - type: regex
+              value: ".*(申请售后|退货).*"
+        # 流程联动
+        target: "state_start_refund"
+      - target: "state_end_troubleshooting"
+
+  - id: "state_issue_resolved"
+    actions:
+      - type: respond
+        text: "太好了！很高兴能帮您解决问题。祝您使用愉快！"
+    transitions:
+      - target: "state_end_troubleshooting"
+
+  - id: "state_fallback_options"
+    actions:
+      - type: respond
+        text: "抱歉，我不太理解您的描述。如果耳机无法正常使用，您可以回复【申请售后】为您处理。"
+    transitions:
+      - condition:
+          all:
+            - type: regex
+              value: ".*(申请售后|退货).*"
+        target: "state_start_refund"
+      - target: "state_end_troubleshooting"
+
+  - id: "state_end_troubleshooting"
+    actions:
+      - type: respond
+        text: "感谢您的咨询。"

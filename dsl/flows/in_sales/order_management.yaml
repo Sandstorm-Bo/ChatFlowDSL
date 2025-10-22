@@ -1,0 +1,93 @@
+name: "售中订单管理流程"
+entry_point: "state_start_order_management"
+
+states:
+  - id: "state_start_order_management"
+    triggers:
+      - type: regex
+        value: ".*(订单|物流|快递|取消订单).*"
+    actions:
+      - type: respond
+        text: "您好，需要我为您查询订单状态还是申请取消订单呢？在此之前，请先提供您的订单号。"
+    transitions:
+      - target: "state_collect_order_number"
+
+  - id: "state_collect_order_number"
+    actions:
+      - type: wait_for_input
+    transitions:
+      - condition:
+          all:
+            - type: regex
+              value: "[A-Z0-9]{10,}" # 假设订单号是10位以上字母和数字
+        target: "state_confirm_action"
+      - target: "state_invalid_order_format"
+
+  - id: "state_invalid_order_format"
+    actions:
+      - type: respond
+        text: "您输入的订单号格式好像不太对哦，麻烦您再检查一下呢。"
+    transitions:
+      - target: "state_collect_order_number"
+
+  - id: "state_confirm_action"
+    actions:
+      - type: extract_variable
+        source: user_input
+        regex: "(?P<order_id>[A-Z0-9]{10,})"
+        target: "session.order_id"
+      - type: respond
+        text: "好的，您的订单号是 {{session.order_id}}。请问您需要 [查询物流] 还是 [取消订单]？"
+    transitions:
+      - target: "state_collect_action_choice"
+
+  - id: "state_collect_action_choice"
+    actions:
+      - type: wait_for_input
+    transitions:
+      - condition:
+          all:
+            - type: regex
+              value: ".*(查询|物流|状态).*"
+        target: "state_query_status"
+      - condition:
+          all:
+            - type: regex
+              value: ".*(取消).*"
+        target: "state_cancel_order"
+      - target: "state_unsupported_action"
+
+  - id: "state_query_status"
+    actions:
+      - type: api_call
+        method: GET
+        url: "https://api.my-shop.com/orders/{{session.order_id}}/status"
+        save_to: "session.order_status"
+      - type: respond
+        text: "查询到您的订单最新状态是：【{{session.order_status.text}}】。有其他可以帮您的吗？"
+    transitions:
+      - target: "state_end_order_management"
+
+  - id: "state_cancel_order"
+    actions:
+      - type: api_call
+        method: POST
+        url: "https://api.my-shop.com/orders/{{session.order_id}}/cancel"
+        save_to: "session.cancel_result"
+      - type: respond
+        # 实际场景中，这里的响应会根据API返回结果的不同而走入不同状态
+        text: "{{session.cancel_result.message}}"
+    transitions:
+      - target: "state_end_order_management"
+
+  - id: "state_unsupported_action"
+    actions:
+      - type: respond
+        text: "抱歉，暂时只支持查询物流和取消订单两种操作。"
+    transitions:
+      - target: "state_collect_action_choice"
+
+  - id: "state_end_order_management"
+    actions:
+      - type: respond
+        text: "好的，感谢您的咨询。"

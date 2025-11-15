@@ -5,89 +5,152 @@ states:
   - id: "state_start_order_management"
     triggers:
       - type: regex
-        value: ".*(订单|物流|快递|取消订单).*"
+        value: ".*(订单|物流|快递|发货|配送).*"
     actions:
       - type: respond
-        text: "您好，需要我为您查询订单状态还是申请取消订单呢？在此之前，请先提供您的订单号。"
-    transitions:
-      - target: "state_collect_order_number"
+        text: |
+          您好！我可以帮您：
+          1. 查询订单状态和物流信息
+          2. 查看您的所有订单
 
-  - id: "state_collect_order_number"
+          请告诉我您的订单号（如：A1234567890），或者说"查看我的订单"。
+    transitions:
+      - target: "state_collect_order_info"
+
+  - id: "state_collect_order_info"
     actions:
       - type: wait_for_input
+    transitions:
+      # 用户想查看所有订单
+      - condition:
+          all:
+            - type: regex
+              value: ".*(所有|全部|我的).*订单.*"
+        target: "state_list_all_orders"
+      # 用户提供了订单号
+      - condition:
+          all:
+            - type: regex
+              value: "[A-Z][0-9]{10}"
+        target: "state_query_specific_order"
+      - target: "state_invalid_order_format"
+
+  # 列出用户的所有订单
+  - id: "state_list_all_orders"
+    actions:
+      - type: api_call
+        endpoint: "database://orders/list"
+        params:
+          user_id: "U001"  # 实际应用中应该从session中获取当前用户ID
+        save_to: "session.user_orders"
+      - type: respond
+        text: |
+          您的订单列表如下：
+          {{session.order_list_text}}
+
+          请告诉我订单号，我可以为您查询详细信息。
+    transitions:
+      - target: "state_collect_order_info"
+
+  # 查询特定订单
+  - id: "state_query_specific_order"
+    actions:
+      - type: extract_variable
+        source: user_input
+        regex: "(?P<order_id>[A-Z][0-9]{10})"
+        target: "session.order_id"
+      - type: api_call
+        endpoint: "database://orders/get"
+        params:
+          order_id: "{{session.order_id}}"
+        save_to: "session.current_order"
+      - type: respond
+        text: |
+          📦 订单详情
+
+          订单号：{{session.current_order.order_id}}
+          商品名称：{{session.current_order.product_name}}
+          数量：{{session.current_order.quantity}} 件
+          总价：¥{{session.current_order.total_price}}
+          订单状态：{{session.order_status_text}}
+          配送地址：{{session.current_order.shipping_address}}
+          {{session.tracking_info}}
+
+          您需要其他帮助吗？
     transitions:
       - condition:
           all:
             - type: regex
-              value: "[A-Z0-9]{10,}" # 假设订单号是10位以上字母和数字
-        target: "state_confirm_action"
-      - target: "state_invalid_order_format"
+              value: ".*(取消|不要|退).*"
+        target: "state_confirm_cancel"
+      - condition:
+          all:
+            - type: regex
+              value: ".*(退款|退货).*"
+        target: "state_redirect_to_refund"
+      - target: "state_end_order_management"
+
+  # 确认取消订单
+  - id: "state_confirm_cancel"
+    actions:
+      - type: respond
+        text: |
+          您确定要取消订单 {{session.order_id}} 吗？
+
+          订单状态：{{session.order_status_text}}
+
+          提示：
+          - 已发货的订单无法取消，需要申请退款
+          - 取消后无法恢复
+
+          请回复"确认取消"或"不取消"
+    transitions:
+      - condition:
+          all:
+            - type: regex
+              value: ".*(确认|是的|确定).*取消.*"
+        target: "state_cancel_order"
+      - target: "state_end_order_management"
+
+  # 执行取消订单
+  - id: "state_cancel_order"
+    actions:
+      - type: respond
+        text: |
+          正在为您取消订单...
+
+          订单 {{session.order_id}} 已成功取消！
+          退款将在3-5个工作日内原路返回。
+
+          如有疑问，请随时联系客服。
+    transitions:
+      - target: "state_end_order_management"
+
+  # 重定向到退款流程
+  - id: "state_redirect_to_refund"
+    actions:
+      - type: respond
+        text: |
+          好的，已发货的订单需要通过退款流程处理。
+
+          我将为您转接到退款服务...
+          （系统会自动切换到退款流程）
+    transitions:
+      - target: "state_end_order_management"
 
   - id: "state_invalid_order_format"
     actions:
       - type: respond
-        text: "您输入的订单号格式好像不太对哦，麻烦您再检查一下呢。"
-    transitions:
-      - target: "state_collect_order_number"
+        text: |
+          抱歉，订单号格式不正确。
 
-  - id: "state_confirm_action"
-    actions:
-      - type: extract_variable
-        source: user_input
-        regex: "(?P<order_id>[A-Z0-9]{10,})"
-        target: "session.order_id"
-      - type: respond
-        text: "好的，您的订单号是 {{session.order_id}}。请问您需要 [查询物流] 还是 [取消订单]？"
-    transitions:
-      - target: "state_collect_action_choice"
+          订单号格式示例：A1234567890（1个字母+10个数字）
 
-  - id: "state_collect_action_choice"
-    actions:
-      - type: wait_for_input
+          请重新输入您的订单号，或说"查看我的订单"。
     transitions:
-      - condition:
-          all:
-            - type: regex
-              value: ".*(查询|物流|状态).*"
-        target: "state_query_status"
-      - condition:
-          all:
-            - type: regex
-              value: ".*(取消).*"
-        target: "state_cancel_order"
-      - target: "state_unsupported_action"
-
-  - id: "state_query_status"
-    actions:
-      - type: api_call
-        method: GET
-        url: "https://api.my-shop.com/orders/{{session.order_id}}/status"
-        save_to: "session.order_status"
-      - type: respond
-        text: "查询到您的订单最新状态是：【{{session.order_status.text}}】。有其他可以帮您的吗？"
-    transitions:
-      - target: "state_end_order_management"
-
-  - id: "state_cancel_order"
-    actions:
-      - type: api_call
-        method: POST
-        url: "https://api.my-shop.com/orders/{{session.order_id}}/cancel"
-        save_to: "session.cancel_result"
-      - type: respond
-        # 实际场景中，这里的响应会根据API返回结果的不同而走入不同状态
-        text: "{{session.cancel_result.message}}"
-    transitions:
-      - target: "state_end_order_management"
-
-  - id: "state_unsupported_action"
-    actions:
-      - type: respond
-        text: "抱歉，暂时只支持查询物流和取消订单两种操作。"
-    transitions:
-      - target: "state_collect_action_choice"
+      - target: "state_collect_order_info"
 
   - id: "state_end_order_management"
     actions:
       - type: respond
-        text: "好的，感谢您的咨询。"
+        text: "感谢咨询，还有其他需要帮助的吗？"

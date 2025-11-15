@@ -1,36 +1,36 @@
-from rich.console import Console
-from rich.prompt import Prompt
+import sys
+sys.path.append('.')
+
+from core.chatbot import Chatbot
 
 class CliInterface:
-    def __init__(self, message_handler):
-        self.console = Console()
-        self.message_handler = message_handler
+    def __init__(self, chatbot: Chatbot, session_id: str):
+        """
+        Initializes the CLI with a chatbot instance and a session ID.
+        """
+        self.chatbot = chatbot
+        self.session_id = session_id
 
-    def start(self):
-        self.console.print("[bold green]欢迎使用 ChatFlowDSL 智能客服。[/bold green]")
-        self.console.print("输入 'exit' 或 'quit' 退出程序。")
-        
+    def start_chat_loop(self):
+        """
+        Starts the main loop to read user input and print bot responses.
+        """
+        print("\n欢迎使用 ChatFlowDSL 机器人！输入 '退出' 来结束对话。")
         while True:
             try:
-                user_input = Prompt.ask("[bold cyan]You[/bold cyan]")
-
-                if user_input.lower() in ['exit', 'quit']:
-                    self.console.print("[yellow]感谢使用，再见！[/yellow]")
+                user_input = input("您: ")
+                if user_input.strip().lower() in ["退出", "exit", "quit"]:
+                    print("机器人: 感谢您的使用，再见！")
                     break
                 
-                response = self.message_handler(user_input)
-                self.console.print(f"[bold magenta]Bot[/bold magenta]: {response}")
+                if not user_input.strip():
+                    continue
 
-            except KeyboardInterrupt:
-                self.console.print("\n[yellow]检测到中断，程序退出。[/yellow]")
+                responses = self.chatbot.handle_message(self.session_id, user_input)
+                
+                for response in responses:
+                    print(f"机器人: {response}")
+
+            except (KeyboardInterrupt, EOFError):
+                print("\n机器人: 对话已中断，再见！")
                 break
-            except Exception as e:
-                self.console.print(f"[bold red]发生错误: {e}[/bold red]")
-
-def dummy_handler(message: str) -> str:
-    """一个虚拟的消息处理器，用于测试"""
-    return f"已收到您的消息: '{message}'"
-
-if __name__ == '__main__':
-    cli = CliInterface(message_handler=dummy_handler)
-    cli.start()

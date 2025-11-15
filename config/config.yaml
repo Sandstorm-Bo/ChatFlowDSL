@@ -1,6 +1,25 @@
+# LLM配置 - 支持OpenAI兼容接口
 llm:
-  api_key: "YOUR_OPENAI_API_KEY"
-  model_name: "gpt-3.5-turbo"
+  api_key: "YOUR_OPENAI_API_KEY"  # 请替换为你的API密钥，或使用环境变量 OPENAI_API_KEY
+  model_name: "Qwen/Qwen2.5-7B-Instruct"
+  base_url: https://api.siliconflow.cn/v1  # 自定义API端点，如: "https://api.openai.com/v1" 或其他兼容服务
+  timeout: 30  # API调用超时时间(秒)，DeepSeek-R1推理模型需要较长时间
 
-# rule / llm / hybrid
-mode: "rule"
+# 运行模式: rule (纯规则) / llm (纯LLM) / hybrid (混合模式)
+mode: "hybrid"  # 默认混合模式：规则触发流程，LLM辅助理解
+
+# 数据库配置
+database:
+  path: "data/chatbot.db"  # SQLite数据库文件路径
+  auto_init: true  # 是否自动初始化测试数据
+
+# 会话配置
+session:
+  timeout: 3600  # 会话超时时间(秒)
+  max_history: 50  # 最大历史记录数
+
+# 日志配置
+logging:
+  level: "INFO"  # DEBUG / INFO / WARNING / ERROR
+  file: "logs/chatbot.log"
+  console: true

@@ -5,17 +5,20 @@ states:
   - id: "state_start_inquiry"
     triggers:
       - type: regex
-        value: ".*(了解|介绍|咨询一下).*(产品|商品).*"
+        value: ".*(了解|介绍|咨询|看看|推荐).*(产品|商品).*"
     actions:
-      # 1. 先调用API获取主推产品列表
+      # 使用数据库查询获取所有产品列表
       - type: api_call
-        method: GET
-        url: "https://api.my-shop.com/products/featured" # API返回如: [{"id": "headset_001", "name": "智能降噪耳机"}, ...]
+        endpoint: "database://products/list"
+        params:
+          limit: 5
         save_to: "session.featured_products"
-      # 2. 动态生成欢迎语
       - type: respond
-        # ActionExecutor需要支持从列表变量生成文本, 这里我们先定义好期望的行为
-        text: "您好！我们目前主要有 {{session.featured_products_names}}，请问您对哪款产品感兴趣？"
+        text: |
+          您好！欢迎了解我们的产品。我们有以下商品：
+          {{session.products_list}}
+
+          请告诉我您对哪款产品感兴趣，或者直接说出产品名称。
     transitions:
       - target: "state_collect_product_choice"
 
@@ -23,68 +26,207 @@ states:
     actions:
       - type: wait_for_input
     transitions:
-      # 这里为了简化，我们仍然使用正则匹配关键词。
-      # 更高级的实现中，这里的匹配逻辑也可以由API返回的数据动态生成。
+      # 耳机相关
       - condition:
           all:
             - type: regex
-              value: ".*(耳机|earphone).*"
-        target: "state_introduce_headset"
+              value: ".*(耳机|headset|蓝牙).*"
+        target: "state_show_product_P001"
+      # 手环相关
       - condition:
           all:
             - type: regex
-              value: ".*(移动电源|充电宝|power bank).*"
-        target: "state_introduce_powerbank"
-      - target: "state_product_not_found"
+              value: ".*(手环|band|智能穿戴).*"
+        target: "state_show_product_P002"
+      # 充电宝相关
+      - condition:
+          all:
+            - type: regex
+              value: ".*(充电宝|移动电源|power.*bank).*"
+        target: "state_show_product_P003"
+      # 键盘相关
+      - condition:
+          all:
+            - type: regex
+              value: ".*(键盘|keyboard|机械键盘).*"
+        target: "state_show_product_P004"
+      # 摄像头相关
+      - condition:
+          all:
+            - type: regex
+              value: ".*(摄像头|webcam|camera).*"
+        target: "state_show_product_P005"
+      - target: "state_product_search"
 
-  - id: "state_introduce_headset"
+  # 如果没有匹配，尝试搜索
+  - id: "state_product_search"
     actions:
+      - type: set_variable
+        scope: session
+        key: "search_keyword"
+        value: "{{session.last_user_input}}"
       - type: api_call
-        method: GET
-        url: "https://api.my-shop.com/products/headset_001"
-        save_to: "session.product_details"
+        endpoint: "database://products/search"
+        params:
+          keyword: "{{session.search_keyword}}"
+        save_to: "session.search_results"
       - type: respond
         text: |
-          我们的“智能降噪耳机”信息如下：
-          {{session.product_details.description}}
-          当前售价为 {{session.product_details.price}} 元。
-          您需要了解更多详情，还是直接购买呢？
+          让我为您搜索一下...
+          {{session.search_result_text}}
     transitions:
-      - condition:
-          all:
-            - type: regex
-              value: ".*(购买|下单|buy).*"
-        target: "state_start_purchase_flow"
       - target: "state_end_inquiry"
 
-  - id: "state_introduce_powerbank"
+  # 展示具体产品 - P001 无线蓝牙耳机Pro
+  - id: "state_show_product_P001"
     actions:
       - type: api_call
-        method: GET
-        url: "https://api.my-shop.com/products/powerbank_002"
-        save_to: "session.product_details"
+        endpoint: "database://products/get"
+        params:
+          product_id: "P001"
+        save_to: "session.current_product"
       - type: respond
         text: |
-          我们的“超长续航移动电源”信息如下：
-          {{session.product_details.description}}
-          当前售价为 {{session.product_details.price}} 元。
-          您需要了解更多详情，还是直接购买呢？
+          【无线蓝牙耳机Pro】
+          💰 价格：¥{{session.current_product.price}}
+          📦 库存：{{session.current_product.stock}} 件
+
+          产品特点：
+          {{session.current_product.features}}
+
+          产品描述：
+          {{session.current_product.description}}
+
+          您想了解更多详情还是直接购买呢？
     transitions:
       - condition:
           all:
             - type: regex
-              value: ".*(购买|下单|buy).*"
-        target: "state_start_purchase_flow"
+              value: ".*(购买|下单|买|要).*"
+        target: "state_confirm_purchase"
+      - condition:
+          all:
+            - type: regex
+              value: ".*(看看|了解|其他|还有).*"
+        target: "state_start_inquiry"
       - target: "state_end_inquiry"
 
-  - id: "state_product_not_found"
+  # 展示具体产品 - P002 智能手环Max
+  - id: "state_show_product_P002"
+    actions:
+      - type: api_call
+        endpoint: "database://products/get"
+        params:
+          product_id: "P002"
+        save_to: "session.current_product"
+      - type: respond
+        text: |
+          【智能手环Max】
+          💰 价格：¥{{session.current_product.price}}
+          📦 库存：{{session.current_product.stock}} 件
+
+          {{session.current_product.description}}
+
+          您想了解更多详情还是直接购买呢？
+    transitions:
+      - condition:
+          all:
+            - type: regex
+              value: ".*(购买|下单|买|要).*"
+        target: "state_confirm_purchase"
+      - target: "state_end_inquiry"
+
+  # 展示具体产品 - P003 充电宝
+  - id: "state_show_product_P003"
+    actions:
+      - type: api_call
+        endpoint: "database://products/get"
+        params:
+          product_id: "P003"
+        save_to: "session.current_product"
+      - type: respond
+        text: |
+          【便携充电宝20000mAh】
+          💰 价格：¥{{session.current_product.price}}
+          📦 库存：{{session.current_product.stock}} 件
+
+          {{session.current_product.description}}
+
+          大容量，随时随地为您的设备充电！想购买吗？
+    transitions:
+      - condition:
+          all:
+            - type: regex
+              value: ".*(购买|下单|买|要).*"
+        target: "state_confirm_purchase"
+      - target: "state_end_inquiry"
+
+  # 展示具体产品 - P004 机械键盘
+  - id: "state_show_product_P004"
+    actions:
+      - type: api_call
+        endpoint: "database://products/get"
+        params:
+          product_id: "P004"
+        save_to: "session.current_product"
+      - type: respond
+        text: |
+          【机械键盘RGB版】
+          💰 价格：¥{{session.current_product.price}}
+          📦 库存：{{session.current_product.stock}} 件
+
+          {{session.current_product.description}}
+
+          游戏办公两相宜，想试试吗？
+    transitions:
+      - condition:
+          all:
+            - type: regex
+              value: ".*(购买|下单|买|要).*"
+        target: "state_confirm_purchase"
+      - target: "state_end_inquiry"
+
+  # 展示具体产品 - P005 摄像头
+  - id: "state_show_product_P005"
+    actions:
+      - type: api_call
+        endpoint: "database://products/get"
+        params:
+          product_id: "P005"
+        save_to: "session.current_product"
+      - type: respond
+        text: |
+          【4K网络摄像头】
+          💰 价格：¥{{session.current_product.price}}
+          📦 库存：{{session.current_product.stock}} 件
+
+          {{session.current_product.description}}
+
+          高清视频会议必备！需要购买吗？
+    transitions:
+      - condition:
+          all:
+            - type: regex
+              value: ".*(购买|下单|买|要).*"
+        target: "state_confirm_purchase"
+      - target: "state_end_inquiry"
+
+  # 确认购买
+  - id: "state_confirm_purchase"
     actions:
       - type: respond
-        text: "抱歉，我们暂时没有您提到的这款产品。您可以从我们主推的产品中选择一款进行了解。"
+        text: |
+          好的！您想购买【{{session.current_product.name}}】
+          单价：¥{{session.current_product.price}}
+
+          由于这是演示系统，实际购买流程需要跳转到订单系统。
+          您可以说"查看我的订单"来查看已有订单状态。
+
+          还有其他需要了解的吗？
     transitions:
-      - target: "state_collect_product_choice"
+      - target: "state_end_inquiry"
 
   - id: "state_end_inquiry"
     actions:
       - type: respond
-        text: "好的，如果您还有其他问题，随时可以问我。祝您购物愉快！"
+        text: "如果您还有其他问题，随时可以问我。祝您购物愉快！"

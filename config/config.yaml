@@ -1,6 +1,7 @@
 # LLM配置 - 支持OpenAI兼容接口
 llm:
-  api_key: "YOUR_OPENAI_API_KEY"  # 请替换为你的API密钥，或使用环境变量 OPENAI_API_KEY
+  api_key: "sk-qerkanyrjlblvbuvztlmzufjaytkpzbaryvzprzngbjeuwag"  # 请替换为你的API密钥，或使用环境变量 OPENAI_API_KEY
+  #sk-qerkanyrjlblvbuvztlmzufjaytkpzbaryvzprzngbjeuwag
   model_name: "Qwen/Qwen2.5-7B-Instruct"
   base_url: https://api.siliconflow.cn/v1  # 自定义API端点，如: "https://api.openai.com/v1" 或其他兼容服务
   timeout: 30  # API调用超时时间(秒)，DeepSeek-R1推理模型需要较长时间

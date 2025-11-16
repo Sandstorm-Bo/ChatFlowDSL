@@ -4,10 +4,11 @@ from dsl.dsl_parser import DslParser, ChatFlow
 from core.session_manager import Session
 
 class Interpreter:
-    def __init__(self, chat_flow: ChatFlow):
+    def __init__(self, chat_flow: ChatFlow, llm_responder=None):
         if not isinstance(chat_flow, ChatFlow):
             raise TypeError("chat_flow must be an instance of ChatFlow")
         self.chat_flow = chat_flow
+        self.llm_responder = llm_responder  # 可选的LLM响应器，用于语义理解
 
     def process(self, session: Session, user_input: str) -> List[Dict[str, Any]]:
         """
@@ -27,7 +28,7 @@ class Interpreter:
         matched_transition = None
         for transition in transitions:
             condition = transition.get("condition")
-            if self._is_condition_met(condition, user_input):
+            if self._is_condition_met(condition, user_input, session):
                 matched_transition = transition
                 break
         
@@ -51,19 +52,127 @@ class Interpreter:
         # 如果没有找到任何匹配的转换
         return [{"type": "respond", "text": "抱歉，我不知道如何回应。"}]
 
-    def _is_condition_met(self, condition: Optional[Dict[str, Any]], user_input: str) -> bool:
-        """检查单个条件是否满足。目前只支持简单的正则匹配。"""
+    def _is_condition_met(self, condition: Optional[Dict[str, Any]], user_input: str, session: Session = None) -> bool:
+        """
+        检查条件是否满足
+
+        支持的条件类型：
+        1. all: 所有子条件都必须满足
+        2. any: 任一子条件满足即可
+        3. regex: 正则表达式匹配
+        4. variable_equals: 会话变量值比较
+
+        Args:
+            condition: 条件字典
+            user_input: 用户输入
+            session: 会话对象（用于变量比较）
+
+        Returns:
+            True表示条件满足，False表示不满足
+        """
         if condition is None:
             return False
 
+        # 支持 all 逻辑：所有条件都必须满足
         if "all" in condition:
             rules = condition["all"]
             for rule in rules:
-                if rule.get("type") == "regex":
-                    if not re.search(rule.get("value", ""), user_input):
-                        return False
+                if not self._check_single_rule(rule, user_input, session):
+                    return False
             return True
 
+        # 支持 any 逻辑：任一条件满足即可
+        if "any" in condition:
+            rules = condition["any"]
+            for rule in rules:
+                if self._check_single_rule(rule, user_input, session):
+                    return True
+            return False
+
+        # 单个规则（向后兼容）
+        return self._check_single_rule(condition, user_input, session)
+
+    def _check_single_rule(self, rule: Dict[str, Any], user_input: str, session: Session = None) -> bool:
+        """
+        检查单个规则是否满足
+
+        Args:
+            rule: 规则字典
+            user_input: 用户输入
+            session: 会话对象
+
+        Returns:
+            True表示规则满足，False表示不满足
+        """
+        rule_type = rule.get("type")
+
+        # 正则表达式匹配（规则优先）
+        if rule_type == "regex":
+            pattern = rule.get("value", "")
+            matched = bool(re.search(pattern, user_input, re.IGNORECASE))
+            if matched:
+                print(f"  ✓ [规则匹配] regex: '{pattern}' 匹配成功")
+            return matched
+
+        # 变量值比较
+        elif rule_type == "variable_equals":
+            var_name = rule.get("variable")
+            expected_value = rule.get("value")
+
+            if session is None or var_name is None:
+                return False
+
+            # 获取会话变量值
+            actual_value = session.variables.get(var_name)
+
+            # 比较值
+            return actual_value == expected_value
+
+        # 变量存在性检查
+        elif rule_type == "variable_exists":
+            var_name = rule.get("variable")
+            if session is None or var_name is None:
+                return False
+            return var_name in session.variables
+
+        # LLM语义匹配（新增）
+        elif rule_type == "llm_semantic":
+            if not self.llm_responder:
+                print(f"  ✗ [LLM语义匹配] LLM响应器未配置，跳过")
+                return False
+
+            semantic_meaning = rule.get("semantic_meaning", "")
+            confidence_threshold = rule.get("confidence_threshold", 0.7)
+
+            # 准备会话上下文
+            session_context = None
+            if session:
+                session_context = {
+                    "current_state_id": session.current_state_id,
+                    "variables": session.variables
+                }
+
+            try:
+                result = self.llm_responder.check_semantic_match(
+                    user_input=user_input,
+                    semantic_meaning=semantic_meaning,
+                    session_context=session_context
+                )
+
+                matched = result.get("matched", False) and result.get("confidence", 0.0) >= confidence_threshold
+                if matched:
+                    print(f"  ✓ [LLM语义匹配] 成功，置信度: {result.get('confidence', 0):.2f}, 理由: {result.get('reasoning', '')}")
+                else:
+                    print(f"  ✗ [LLM语义匹配] 失败，置信度: {result.get('confidence', 0):.2f}")
+
+                return matched
+
+            except Exception as e:
+                print(f"  ✗ [LLM语义匹配] 异常: {str(e)}")
+                return False
+
+        # 未知规则类型
+        print(f"  ✗ [规则检查] 未知规则类型: {rule_type}")
         return False
     
     def get_initial_actions(self) -> List[Dict[str, Any]]:

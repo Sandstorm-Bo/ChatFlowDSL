@@ -284,6 +284,173 @@ class LLMResponder:
             print(f"[实体提取失败] {str(e)}")
             return {}
 
+    def check_semantic_match(self, user_input: str, semantic_meaning: str,
+                            session_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        检查用户输入是否符合指定的语义含义（用于条件判断）
+
+        Args:
+            user_input: 用户输入文本
+            semantic_meaning: 期望的语义含义描述
+            session_context: 会话上下文（可选，提供更准确的判断）
+
+        Returns:
+            {
+                "matched": True/False,
+                "confidence": 0.0-1.0,
+                "reasoning": "判断理由"
+            }
+        """
+        # 构建上下文信息
+        context_info = ""
+        if session_context:
+            context_info = f"\n\n当前会话上下文：{json.dumps(session_context, ensure_ascii=False, indent=2)}"
+
+        system_prompt = f"""你是一个语义理解系统。
+你的任务是判断用户输入是否符合指定的语义含义。
+
+请以JSON格式返回结果：
+{{
+    "matched": true/false,
+    "confidence": 0.0-1.0的置信度,
+    "reasoning": "简短的判断理由"
+}}
+
+判断标准：
+- matched为true表示用户输入符合语义含义
+- confidence表示判断的置信度（0-1之间）
+- 置信度>=0.7才认为是明确匹配
+"""
+
+        user_prompt = f"""用户输入：{user_input}
+
+期望的语义含义：{semantic_meaning}{context_info}
+
+请判断用户输入是否符合这个语义含义。"""
+
+        try:
+            print(f"[LLM语义匹配] 输入: '{user_input}' | 期望语义: '{semantic_meaning}'")
+
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.2,  # 低温度以获得更一致的判断
+                max_tokens=150,
+                timeout=self.timeout
+            )
+
+            content = response.choices[0].message.content.strip()
+            result = self._extract_json(content)
+
+            if result and "matched" in result:
+                print(f"  ✓ LLM判断: {'匹配' if result['matched'] else '不匹配'} (置信度: {result.get('confidence', 0):.2f})")
+                return result
+            else:
+                return {
+                    "matched": False,
+                    "confidence": 0.0,
+                    "reasoning": "无法解析LLM响应"
+                }
+
+        except Exception as e:
+            print(f"[LLM语义匹配失败] {type(e).__name__}: {str(e)}")
+            # 失败时返回不匹配
+            return {
+                "matched": False,
+                "confidence": 0.0,
+                "reasoning": f"API调用失败: {str(e)}"
+            }
+
+    def match_condition_with_llm(self, user_input: str, condition_description: str,
+                                 available_targets: List[str],
+                                 session_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        使用LLM进行多路条件匹配（用于状态转换）
+
+        Args:
+            user_input: 用户输入
+            condition_description: 当前状态的描述
+            available_targets: 可选的目标状态列表及其触发条件描述
+            session_context: 会话上下文
+
+        Returns:
+            {
+                "target": "目标状态",
+                "confidence": 0.0-1.0,
+                "reasoning": "匹配理由"
+            }
+        """
+        context_info = ""
+        if session_context:
+            # 只包含关键上下文信息，避免过长
+            key_context = {
+                "current_state": session_context.get("current_state_id"),
+                "variables": session_context.get("variables", {})
+            }
+            context_info = f"\n\n当前会话上下文：{json.dumps(key_context, ensure_ascii=False, indent=2)}"
+
+        targets_info = "\n".join([f"- {target}" for target in available_targets])
+
+        system_prompt = f"""你是一个对话流程路由系统。
+你的任务是根据用户输入和当前状态，判断应该转换到哪个目标状态。
+
+当前状态：{condition_description}
+
+可选的目标状态：
+{targets_info}
+
+请以JSON格式返回结果：
+{{
+    "target": "目标状态名称",
+    "confidence": 0.0-1.0的置信度,
+    "reasoning": "选择理由"
+}}
+
+如果没有合适的目标，返回：
+{{
+    "target": null,
+    "confidence": 0.0,
+    "reasoning": "无匹配目标"
+}}
+"""
+
+        user_prompt = f"用户输入：{user_input}{context_info}\n\n请判断应该转换到哪个目标状态。"
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.2,
+                max_tokens=200,
+                timeout=self.timeout
+            )
+
+            content = response.choices[0].message.content.strip()
+            result = self._extract_json(content)
+
+            if result:
+                return result
+            else:
+                return {
+                    "target": None,
+                    "confidence": 0.0,
+                    "reasoning": "无法解析LLM响应"
+                }
+
+        except Exception as e:
+            print(f"[LLM条件匹配失败] {str(e)}")
+            return {
+                "target": None,
+                "confidence": 0.0,
+                "reasoning": f"API调用失败: {str(e)}"
+            }
+
     def generate_response(self, context: str, user_input: str) -> str:
         """
         生成智能回复

@@ -137,7 +137,10 @@ class ActionExecutor:
                 return self.db.get_order(order_id)
 
             elif path == "orders/list":
-                user_id = params.get("user_id", "U001")  # 默认用户
+                # 优先从session中获取user_id，实现自动查询当前用户的订单
+                user_id = session.get("user_id")
+                if not user_id:
+                    user_id = params.get("user_id", "U001")  # 降级到参数或默认用户
                 return self.db.get_user_orders(user_id)
 
             # 退款相关查询

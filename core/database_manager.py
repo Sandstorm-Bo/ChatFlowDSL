@@ -39,15 +39,17 @@ class DatabaseManager:
         conn = self._get_connection()
         cursor = conn.cursor()
 
-        # 用户表
+        # 用户表（增加了密码字段用于登录认证）
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY,
-                username TEXT NOT NULL,
+                username TEXT NOT NULL UNIQUE,
+                password TEXT NOT NULL,
                 phone TEXT,
                 email TEXT,
                 address TEXT,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                last_login TEXT
             )
         """)
 
@@ -144,10 +146,11 @@ class DatabaseManager:
         if self.get_product_count() > 0:
             return
 
-        # 添加测试用户
+        # 添加测试用户（包含密码）
         self.add_user({
             "user_id": "U001",
             "username": "张三",
+            "password": "password123",
             "phone": "13800138000",
             "email": "zhangsan@example.com",
             "address": "北京市朝阳区xx街道xx号"
@@ -156,9 +159,19 @@ class DatabaseManager:
         self.add_user({
             "user_id": "U002",
             "username": "李四",
+            "password": "password456",
             "phone": "13900139000",
             "email": "lisi@example.com",
             "address": "上海市浦东新区xx路xx号"
+        })
+
+        self.add_user({
+            "user_id": "U003",
+            "username": "王五",
+            "password": "password789",
+            "phone": "13700137000",
+            "email": "wangwu@example.com",
+            "address": "广州市天河区xx大道xx号"
         })
 
         # 添加测试商品
@@ -266,11 +279,12 @@ class DatabaseManager:
             conn = self._get_connection()
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO users (user_id, username, phone, email, address)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO users (user_id, username, password, phone, email, address)
+                VALUES (?, ?, ?, ?, ?, ?)
             """, (
                 user_data["user_id"],
                 user_data["username"],
+                user_data["password"],
                 user_data.get("phone"),
                 user_data.get("email"),
                 user_data.get("address")
@@ -293,6 +307,108 @@ class DatabaseManager:
         if row:
             return dict(row)
         return None
+
+    def authenticate_user(self, username: str, password: str) -> Optional[Dict[str, Any]]:
+        """
+        用户登录认证
+
+        Args:
+            username: 用户名
+            password: 密码
+
+        Returns:
+            如果认证成功，返回用户信息（不含密码）；否则返回None
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE username = ? AND password = ?", (username, password))
+        row = cursor.fetchone()
+
+        if row:
+            user_data = dict(row)
+            # 更新最后登录时间
+            cursor.execute("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE user_id = ?", (user_data["user_id"],))
+            conn.commit()
+            # 移除密码字段，不返回给客户端
+            user_data.pop("password", None)
+            conn.close()
+            return user_data
+
+        conn.close()
+        return None
+
+    def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        """
+        根据用户名获取用户信息
+
+        Args:
+            username: 用户名
+
+        Returns:
+            用户信息（包含密码字段）
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            return dict(row)
+        return None
+
+    def register_user(self, username: str, password: str, phone: str = None, email: str = None, address: str = None) -> Dict[str, Any]:
+        """
+        用户注册
+
+        Args:
+            username: 用户名（必须唯一）
+            password: 密码
+            phone: 手机号（可选）
+            email: 邮箱（可选）
+            address: 地址（可选）
+
+        Returns:
+            成功返回 {"success": True, "user_id": "...", "message": "..."}
+            失败返回 {"success": False, "message": "错误信息"}
+        """
+        # 检查用户名是否已存在
+        existing_user = self.get_user_by_username(username)
+        if existing_user:
+            return {
+                "success": False,
+                "message": f"用户名 '{username}' 已被注册，请使用其他用户名"
+            }
+
+        # 生成新的user_id
+        import uuid
+        user_id = f"U{str(uuid.uuid4())[:8].upper()}"
+
+        # 确保user_id唯一（极小概率会重复）
+        while self.get_user(user_id):
+            user_id = f"U{str(uuid.uuid4())[:8].upper()}"
+
+        # 添加用户
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO users (user_id, username, password, phone, email, address)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (user_id, username, password, phone, email, address))
+            conn.commit()
+            conn.close()
+
+            return {
+                "success": True,
+                "user_id": user_id,
+                "message": f"注册成功！欢迎您，{username}！"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"注册失败: {str(e)}"
+            }
 
     # ==================== 商品相关操作 ====================
 

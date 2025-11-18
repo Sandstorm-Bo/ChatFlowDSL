@@ -110,7 +110,7 @@ def test_action_executor():
         }
     ]
 
-    responses = executor.execute(actions, session.__dict__)
+    responses = executor.execute(actions, session)
     print("\n响应:")
     for r in responses:
         print(r)
@@ -133,7 +133,7 @@ def test_action_executor():
         }
     ]
 
-    responses2 = executor.execute(actions2, session2.__dict__)
+    responses2 = executor.execute(actions2, session2)
     print("\n响应:")
     for r in responses2:
         print(r)
@@ -175,7 +175,7 @@ def test_integration():
         }
     ]
 
-    responses = executor.execute(actions, session1.__dict__)
+    responses = executor.execute(actions, session1)
     print("机器人:", responses[0] if responses else "")
 
     # 模拟场景：查询订单
@@ -202,7 +202,7 @@ def test_integration():
         }
     ]
 
-    responses2 = executor.execute(actions2, session2.__dict__)
+    responses2 = executor.execute(actions2, session2)
     print("机器人:", responses2[0] if responses2 else "")
 
     print("\n✓ 集成测试通过")

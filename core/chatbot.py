@@ -43,14 +43,18 @@ class Chatbot:
         Returns:
             {flow_name: intent_description}
         """
-        intent_map = {
-            "产品咨询流程": "用户想了解产品信息、查看商品详情、询问价格和功能",
-            "订单管理流程": "用户想查询订单状态、查看物流信息、取消订单",
-            "退款退货流程": "用户想申请退款或退货、反馈商品质量问题",
-            "发票申请流程": "用户需要开具发票、提供发票抬头和税号",
+        default_intents = {
+            "售前产品咨询流程": "用户想了解产品信息、查看商品详情、询问价格和功能",
+            "售中订单管理流程": "用户想查询订单状态、查看物流信息、取消订单",
+            "标准退款流程": "用户想申请退款或退货、反馈商品质量问题",
+            "发票服务流程": "用户需要开具发票、提供发票抬头和税号",
             "耳机故障排查流程": "用户反馈耳机故障、设备连接问题、需要技术支持",
             "通用闲聊流程": "用户打招呼、闲聊、问候"
         }
+
+        intent_map = {}
+        for flow_name in self.flows.keys():
+            intent_map[flow_name] = default_intents.get(flow_name, f"与{flow_name}相关的咨询")
 
         return intent_map
 
@@ -241,5 +245,5 @@ class Chatbot:
             return ["抱歉，我暂时无法理解您的意思。您可以尝试：\n- 咨询产品信息\n- 查询订单状态\n- 申请退款退货\n- 开具发票\n- 反馈故障问题"]
 
         # 执行动作
-        responses = self.action_executor.execute(actions, session.to_dict())
+        responses = self.action_executor.execute(actions, session)
         return responses

@@ -1,6 +1,7 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 import re
 from core.database_manager import DatabaseManager
+from core.session_manager import Session
 
 class ActionExecutor:
     """
@@ -39,7 +40,7 @@ class ActionExecutor:
             }
         }
 
-    def execute(self, actions: List[Dict[str, Any]], session: Dict[str, Any]) -> List[str]:
+    def execute(self, actions: List[Dict[str, Any]], session: Union[Session, Dict[str, Any]]) -> List[str]:
         """
         Executes a list of actions and returns a list of text responses for the user.
         """
@@ -63,11 +64,11 @@ class ActionExecutor:
                 if response_text:
                     responses.append(response_text)
             elif action_type not in ["api_call", "extract_variable", "set_variable", "wait_for_input"]:
-                 print(f"Warning: Unknown action type '{action_type}'")
+                print(f"Warning: Unknown action type '{action_type}'")
 
         return responses
 
-    def _handle_api_call(self, action: Dict[str, Any], session: Dict[str, Any]):
+    def _handle_api_call(self, action: Dict[str, Any], session: Union[Session, Dict[str, Any]]):
         """
         处理API调用动作
         支持database://协议直接查询数据库，或使用传统HTTP API
@@ -83,19 +84,21 @@ class ActionExecutor:
 
         print(f"[ActionExecutor] Calling API: {endpoint}")
 
+        resolved_params = {k: self._resolve_param_value(v, session) for k, v in params.items()}
+
         # 处理数据库协议
         if endpoint.startswith("database://"):
-            data = self._handle_database_query(endpoint, params, session)
+            data = self._handle_database_query(endpoint, resolved_params, session)
         # 处理传统HTTP API (目前使用Mock)
         else:
             response = self._mock_api.get(endpoint, {})
             data = response.get("data")
 
         if data is not None:
-            session.setdefault("variables", {})[variable_name] = data
+            self._get_variables(session)[variable_name] = data
             print(f"[ActionExecutor] Saved result to 'session.{variable_name}'")
 
-    def _handle_database_query(self, endpoint: str, params: Dict[str, Any], session: Dict[str, Any]) -> Any:
+    def _handle_database_query(self, endpoint: str, params: Dict[str, Any], session: Union[Session, Dict[str, Any]]) -> Any:
         """
         处理数据库查询
         支持的endpoint格式：
@@ -119,26 +122,29 @@ class ActionExecutor:
             elif path == "products/search":
                 keyword = params.get("keyword", "")
                 # 从session变量中获取关键词
-                if not keyword and "keyword" in session.get("variables", {}):
-                    keyword = session["variables"]["keyword"]
+                variables = self._get_variables(session)
+                if not keyword and "keyword" in variables:
+                    keyword = variables["keyword"]
                 return self.db.search_products(keyword)
 
             elif path == "products/get":
                 product_id = params.get("product_id")
-                if not product_id and "product_id" in session.get("variables", {}):
-                    product_id = session["variables"]["product_id"]
+                variables = self._get_variables(session)
+                if not product_id and "product_id" in variables:
+                    product_id = variables["product_id"]
                 return self.db.get_product(product_id)
 
             # 订单相关查询
             elif path == "orders/get":
                 order_id = params.get("order_id")
-                if not order_id and "order_id" in session.get("variables", {}):
-                    order_id = session["variables"]["order_id"]
+                variables = self._get_variables(session)
+                if not order_id and "order_id" in variables:
+                    order_id = variables["order_id"]
                 return self.db.get_order(order_id)
 
             elif path == "orders/list":
                 # 优先从session中获取user_id，实现自动查询当前用户的订单
-                user_id = session.get("user_id")
+                user_id = self._get_session_value(session, "user_id")
                 if not user_id:
                     user_id = params.get("user_id", "U001")  # 降级到参数或默认用户
                 return self.db.get_user_orders(user_id)
@@ -146,15 +152,17 @@ class ActionExecutor:
             # 退款相关查询
             elif path == "refunds/check":
                 order_id = params.get("order_id")
-                if not order_id and "order_id" in session.get("variables", {}):
-                    order_id = session["variables"]["order_id"]
+                variables = self._get_variables(session)
+                if not order_id and "order_id" in variables:
+                    order_id = variables["order_id"]
                 return self.db.get_refund_by_order(order_id)
 
             # 发票相关查询
             elif path == "invoices/check_eligibility":
                 order_id = params.get("order_id")
-                if not order_id and "order_id" in session.get("variables", {}):
-                    order_id = session["variables"]["order_id"]
+                variables = self._get_variables(session)
+                if not order_id and "order_id" in variables:
+                    order_id = variables["order_id"]
                 return self.db.check_order_invoice_eligibility(order_id)
 
             else:
@@ -166,7 +174,7 @@ class ActionExecutor:
             return None
 
 
-    def _handle_respond(self, action: Dict[str, Any], session: Dict[str, Any]) -> str:
+    def _handle_respond(self, action: Dict[str, Any], session: Union[Session, Dict[str, Any]]) -> str:
         """
         处理响应动作，支持复杂的模板渲染
         """
@@ -175,6 +183,8 @@ class ActionExecutor:
 
         # 预处理特殊变量
         self._prepare_display_variables(session)
+        display_vars = self._get_display_vars(session)
+        variables = self._get_variables(session)
 
         def repl(match):
             full_match = match.group(0)
@@ -185,11 +195,11 @@ class ActionExecutor:
                 return full_match
 
             # 处理特殊显示变量
-            if parts_str in session.get("_display_vars", {}):
-                return session["_display_vars"][parts_str]
+            if parts_str in display_vars:
+                return display_vars[parts_str]
 
             # 通用变量访问
-            current_data = session.get("variables", {})
+            current_data = variables
             for part in parts[1:]:
                 if isinstance(current_data, dict):
                     current_data = current_data.get(part)
@@ -202,13 +212,13 @@ class ActionExecutor:
         processed_text = re.sub(r"\{\{\s*(session\..*?)\s*\}\}", repl, text)
         return processed_text
 
-    def _prepare_display_variables(self, session: Dict[str, Any]):
+    def _prepare_display_variables(self, session: Union[Session, Dict[str, Any]]):
         """
         准备用于显示的特殊变量
         将复杂数据结构转换为易读的文本格式
         """
-        variables = session.get("variables", {})
-        display_vars = session.setdefault("_display_vars", {})
+        variables = self._get_variables(session)
+        display_vars = self._get_display_vars(session)
 
         # 处理产品列表
         if "featured_products" in variables:
@@ -289,11 +299,11 @@ class ActionExecutor:
                     display_vars["session.search_result_text"] = "抱歉，没有找到相关商品。"
     
     # ... _handle_extract_variable and _handle_set_variable remain unchanged
-    def _handle_extract_variable(self, action: Dict[str, Any], session: Dict[str, Any]):
+    def _handle_extract_variable(self, action: Dict[str, Any], session: Union[Session, Dict[str, Any]]):
         """Handles the 'extract_variable' action."""
         # This is a simplified version. A real implementation needs access to the last user input.
         # We will simulate it by assuming the input is passed into the session for now.
-        user_input = session.get("last_user_input", "")
+        user_input = self._get_session_value(session, "last_user_input", "")
         regex = action.get("regex")
         target_variable_path = action.get("target")
 
@@ -306,15 +316,49 @@ class ActionExecutor:
             # e.g., (?P<order_id>...) and target is "session.order_id"
             variable_name = target_variable_path.split('.')[1]
             if variable_name in match.groupdict():
-                session.setdefault("variables", {})[variable_name] = match.group(variable_name)
+                self._get_variables(session)[variable_name] = match.group(variable_name)
                 print(f"[ActionExecutor] Extracted '{variable_name}' = '{match.group(variable_name)}'")
 
-    def _handle_set_variable(self, action: Dict[str, Any], session: Dict[str, Any]):
+    def _handle_set_variable(self, action: Dict[str, Any], session: Union[Session, Dict[str, Any]]):
         """Handles the 'set_variable' action."""
         scope = action.get("scope")
         key = action.get("key")
         value = action.get("value")
 
         if scope == "session" and key:
-            session.setdefault("variables", {})[key] = value
+            self._get_variables(session)[key] = value
             print(f"[ActionExecutor] Set variable '{key}' = '{value}'")
+
+    def _get_variables(self, session: Union[Session, Dict[str, Any]]) -> Dict[str, Any]:
+        """Access session variables with write-through semantics."""
+        if isinstance(session, Session):
+            return session.variables
+        return session.setdefault("variables", {})
+
+    def _get_display_vars(self, session: Union[Session, Dict[str, Any]]) -> Dict[str, Any]:
+        """Access display variables, creating storage when missing."""
+        if isinstance(session, Session):
+            if not hasattr(session, "_display_vars"):
+                session._display_vars = {}
+            return session._display_vars
+        return session.setdefault("_display_vars", {})
+
+    def _get_session_value(self, session: Union[Session, Dict[str, Any]], key: str, default: Any = None) -> Any:
+        if isinstance(session, Session):
+            return getattr(session, key, default)
+        return session.get(key, default)
+
+    def _resolve_param_value(self, value: Any, session: Union[Session, Dict[str, Any]]) -> Any:
+        """Resolve templated parameter values using session variables."""
+        if isinstance(value, str):
+            match = re.match(r"\{\{\s*session\.(.*?)\s*\}\}", value)
+            if match:
+                current = self._get_variables(session)
+                for part in match.group(1).split('.'):
+                    if isinstance(current, dict):
+                        current = current.get(part)
+                    else:
+                        current = None
+                        break
+                return current
+        return value

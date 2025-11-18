@@ -206,7 +206,7 @@ if __name__ == '__main__':
     initial_actions = interpreter.get_initial_actions()
     # 在执行动作前，需要设置当前状态
     session.current_state_id = chat_flow.entry_point
-    responses = action_executor.execute(initial_actions, session.to_dict())
+    responses = action_executor.execute(initial_actions, session)
     for res in responses:
         print(f"机器人: {res}")
 
@@ -224,7 +224,7 @@ if __name__ == '__main__':
         
         actions = interpreter.process(session, user_input)
         
-        responses = action_executor.execute(actions, session.to_dict())
+        responses = action_executor.execute(actions, session)
         for res in responses:
             print(f"机器人: {res}")
         

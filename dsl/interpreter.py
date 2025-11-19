@@ -23,33 +23,47 @@ class Interpreter:
         if not current_state:
             return [{"type": "respond", "text": f"错误：找不到状态 {current_state_id}。"}]
 
+        print(f"[Interpreter] 当前状态: {current_state_id}")
+
         # 寻找匹配的转换规则
         transitions = current_state.get("transitions", [])
+        print(f"[Interpreter] 检查 {len(transitions)} 个转换规则")
+
         matched_transition = None
-        for transition in transitions:
+        for i, transition in enumerate(transitions):
             condition = transition.get("condition")
+            print(f"[Interpreter] 检查转换 #{i+1}, condition={condition is not None}")
             if self._is_condition_met(condition, user_input, session):
                 matched_transition = transition
+                print(f"[Interpreter] ✓ 转换 #{i+1} 匹配成功, target={transition.get('target')}")
                 break
-        
-        # 如果没有匹配的条件，且存在一个没有条件的“兜底”转换
+            else:
+                print(f"[Interpreter] ✗ 转换 #{i+1} 不匹配")
+
+        # 如果没有匹配的条件，且存在一个没有条件的"兜底"转换
         if not matched_transition:
-            for transition in transitions:
+            print(f"[Interpreter] 未找到条件匹配，查找兜底转换...")
+            for i, transition in enumerate(transitions):
                 if "condition" not in transition:
                     matched_transition = transition
+                    print(f"[Interpreter] ✓ 找到兜底转换 #{i+1}, target={transition.get('target')}")
                     break
 
         if matched_transition:
             # 转换状态
             next_state_id = matched_transition.get("target")
+            print(f"[Interpreter] 状态转换: {current_state_id} -> {next_state_id}")
             session.current_state_id = next_state_id
             next_state = self.chat_flow.get_state(next_state_id)
             if next_state:
-                return next_state.get("actions", [])
+                actions = next_state.get("actions", [])
+                print(f"[Interpreter] 返回 {len(actions)} 个动作")
+                return actions
             else:
                 return [{"type": "respond", "text": f"错误：找不到目标状态 {next_state_id}。"}]
 
         # 如果没有找到任何匹配的转换
+        print(f"[Interpreter] 警告：没有找到任何匹配的转换，返回默认响应")
         return [{"type": "respond", "text": "抱歉，我不知道如何回应。"}]
 
     def _is_condition_met(self, condition: Optional[Dict[str, Any]], user_input: str, session: Session = None) -> bool:

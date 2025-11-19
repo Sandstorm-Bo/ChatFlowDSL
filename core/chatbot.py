@@ -48,7 +48,7 @@ class Chatbot:
             "售中订单管理流程": "用户想查询订单状态、查看物流信息、取消订单",
             "标准退款流程": "用户想申请退款或退货、反馈商品质量问题",
             "发票服务流程": "用户需要开具发票、提供发票抬头和税号",
-            "耳机故障排查流程": "用户反馈耳机故障、设备连接问题、需要技术支持",
+            "设备故障排查流程": "用户反馈耳机、手环、键盘、摄像头等设备异常，寻求排查或售后",
             "通用闲聊流程": "用户打招呼、闲聊、问候"
         }
 
@@ -101,7 +101,7 @@ class Chatbot:
         print(f"  [FAIL] [规则匹配失败] 未匹配到任何流程")
         return None
 
-    def _try_llm_based_trigger(self, user_input: str) -> Optional[str]:
+    def _try_llm_based_trigger(self, user_input: str, session: Optional[Session]) -> Optional[str]:
         """
         使用LLM进行意图识别，触发流程（兜底方案）
 
@@ -118,12 +118,24 @@ class Chatbot:
         print(f"[步骤2: LLM语义匹配] 调用LLM分析意图...")
 
         try:
-            # 准备可用的意图列表
-            available_intents = list(self.flow_intents.values())
+            # 准备流程映射信息（流程名称 -> 描述）
+            flow_descriptions = []
+            for flow_name, flow_intent in self.flow_intents.items():
+                flow_descriptions.append(f"- {flow_name}: {flow_intent}")
 
+            # 构建会话上下文，帮助LLM结合历史判断意图
+            session_context = None
+            if session is not None:
+                session_context = {
+                    "active_flow_name": session.get("active_flow_name"),
+                    "user_history": getattr(session, "user_history", []),
+                }
+
+            # 调用LLM识别意图，传入流程描述列表
             result = self.llm_responder.recognize_intent(
                 user_input=user_input,
-                available_intents=available_intents
+                available_intents=flow_descriptions,
+                session_context=session_context,
             )
 
             intent = result.get("intent", "")
@@ -133,24 +145,73 @@ class Chatbot:
             print(f"  LLM识别结果: 意图='{intent}', 置信度={confidence:.2f}")
             print(f"  理由: {reasoning}")
 
-            # 置信度阈值：>=0.7才认为匹配
-            if confidence < 0.7:
-                print(f"  [FAIL] [LLM匹配失败] 置信度过低 ({confidence:.2f} < 0.7)")
+            # 置信度阈值：>=0.4才认为匹配（降低阈值以提高识别成功率）
+            if confidence < 0.4:
+                print(f"  [FAIL] [LLM匹配失败] 置信度过低 ({confidence:.2f} < 0.4)")
                 return None
 
-            # 根据意图找到对应的流程
-            for flow_name, flow_intent in self.flow_intents.items():
-                # 模糊匹配：检查识别出的意图是否包含在流程意图描述中
-                if intent in flow_intent or any(keyword in user_input for keyword in intent.split()):
+            # 尝试从LLM返回的意图中提取流程名称
+            # 方法1：检查流程名称是否直接出现在返回的意图中
+            for flow_name in self.flow_intents.keys():
+                if flow_name in intent:
                     print(f"  [OK] [LLM匹配成功] 触发流程: '{flow_name}'")
                     return flow_name
 
+            # 方法2：模糊匹配关键词
+            intent_lower = intent.lower()
+            # 优先匹配退换货，避免因为“商品”关键词误判到售前
+            if "退款" in intent_lower or "退货" in intent_lower:
+                print(f"  [OK] [LLM匹配成功] 触发流程: '标准退款流程'")
+                return "标准退款流程"
+            elif "发票" in intent_lower:
+                print(f"  [OK] [LLM匹配成功] 触发流程: '发票服务流程'")
+                return "发票服务流程"
+            elif "订单" in intent_lower or "物流" in intent_lower or "快" in intent_lower:
+                print(f"  [OK] [LLM匹配成功] 触发流程: '售中订单管理流程'")
+                return "售中订单管理流程"
+            elif "产品" in intent_lower or "商品" in intent_lower or "咨询" in intent_lower:
+                print(f"  [OK] [LLM匹配成功] 触发流程: '售前产品咨询流程'")
+                return "售前产品咨询流程"
+            elif "故障" in intent_lower or "坏" in intent_lower or "闪" in intent_lower:
+                print(f"  [OK] [LLM匹配成功] 触发流程: '设备故障排查流程'")
+                return "设备故障排查流程"
+            elif "闲聊" in intent_lower or "问候" in intent_lower:
+                print(f"  [OK] [LLM匹配成功] 触发流程: '通用闲聊流程'")
+                return "通用闲聊流程"
             print(f"  [FAIL] [LLM匹配失败] 意图'{intent}'未映射到任何流程")
             return None
 
         except Exception as e:
             print(f"  [ERROR] [LLM匹配异常] {type(e).__name__}: {str(e)}")
             return None
+
+    def _generate_fallback_response(self, user_input: str) -> str:
+        """
+        生成友好的兜底回复（当无法匹配任何流程时使用）
+
+        优先使用LLM生成自然回复，失败时降级到固定模板
+        """
+        if self.llm_responder:
+            try:
+                print(f"[兜底回复] 使用LLM生成友好回复...")
+
+                context = """我是一个智能客服机器人。
+我可以帮您：
+- 咨询产品信息
+- 查询订单状态
+- 处理退款退货
+- 申请发票
+- 解决设备故障问题"""
+
+                response = self.llm_responder.generate_response(context, user_input)
+                print(f"  ✓ LLM生成回复成功")
+                return response
+            except Exception as e:
+                print(f"  [WARN] LLM生成回复失败: {e}")
+                # 降级到固定模板
+
+        # 固定模板（兜底的兜底）
+        return "抱歉，我暂时无法理解您的意思。您可以尝试：\n- 咨询产品信息\n- 查询订单状态\n- 申请退款退货\n- 开具发票\n- 反馈故障问题"
 
     def handle_message(self, session_id: str, user_input: str, user_id: Optional[str] = None) -> List[str]:
         """
@@ -172,6 +233,13 @@ class Chatbot:
         这种设计允许用户随时通过关键词切换到其他业务流程，解决了"通用闲聊流程死锁"问题。
         """
         session = self.session_manager.get_session(session_id, user_id)
+
+        # 维护简单的用户输入历史，供LLM进行上下文感知的意图识别
+        if session.last_user_input:
+            # 只保留最近几轮，避免过长
+            session.user_history.append(session.last_user_input)
+            if len(session.user_history) > 5:
+                session.user_history = session.user_history[-5:]
         session.last_user_input = user_input
 
         active_flow_name = session.get("active_flow_name")
@@ -191,7 +259,7 @@ class Chatbot:
 
         # Step 2: 规则匹配失败，尝试LLM语义理解（兜底）
         if not matched_flow_name:
-            matched_flow_name = self._try_llm_based_trigger(user_input)
+            matched_flow_name = self._try_llm_based_trigger(user_input, session)
 
         # Step 3: 处理流程切换逻辑
         if matched_flow_name:
@@ -240,10 +308,18 @@ class Chatbot:
 
         print(f"{'='*70}\n")
 
-        # 如果没有任何动作，返回默认提示
+        # 如果没有任何动作，使用LLM生成友好的兜底回复
         if not actions:
-            return ["抱歉，我暂时无法理解您的意思。您可以尝试：\n- 咨询产品信息\n- 查询订单状态\n- 申请退款退货\n- 开具发票\n- 反馈故障问题"]
+            fallback_response = self._generate_fallback_response(user_input)
+            return [fallback_response]
 
         # 执行动作
         responses = self.action_executor.execute(actions, session)
+
+        # 如果执行后没有任何响应（例如只有wait_for_input），也使用兜底回复
+        if not responses:
+            print(f"[WARN] 动作执行后无响应，使用兜底回复")
+            fallback_response = self._generate_fallback_response(user_input)
+            return [fallback_response]
+
         return responses

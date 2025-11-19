@@ -14,6 +14,8 @@ states:
 
   - id: "state_collect_order_number"
     actions:
+      - type: respond
+        text: "请提供需要开具发票的订单号，例如 A1234567890。"
       - type: wait_for_input
     transitions:
       - condition:
@@ -66,6 +68,8 @@ states:
 
   - id: "state_process_invoice_request"
     actions:
+      - type: respond
+        text: "收到，请按“抬头:XXX, 税号:XXX”的格式提供发票信息。"
       - type: wait_for_input
     transitions:
       - condition:
@@ -106,3 +110,12 @@ states:
     actions:
       - type: respond
         text: "感谢您的咨询。"
+    transitions:
+      # 如果用户继续提到发票相关内容，则回到发票入口
+      - condition:
+          all:
+            - type: regex
+              value: ".*(发票|invoice).*"
+        target: "state_start_invoice"
+      # 其他情况也回到入口，由入口决定是否再次进入发票流程
+      - target: "state_start_invoice"

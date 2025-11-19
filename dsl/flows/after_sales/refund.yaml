@@ -14,6 +14,8 @@ states:
 
   - id: "state_collect_reason"
     actions:
+      - type: respond
+        text: "请您简单描述一下退款原因，例如“商品有损坏”“不喜欢、七天无理由”等。"
       - type: wait_for_input
     transitions:
       - condition:
@@ -52,6 +54,8 @@ states:
       
   - id: "state_collect_order_number"
     actions:
+      - type: respond
+        text: "请提供需要退款的订单号，例如 A1234567890。"
       - type: wait_for_input
     transitions:
       - condition:
@@ -97,3 +101,12 @@ states:
     actions:
       - type: respond
         text: "感谢您的咨询，再见！"
+    transitions:
+      # 如果用户继续就退款相关发问，回到退款入口
+      - condition:
+          all:
+            - type: regex
+              value: ".*(退款|退货|售后).*"
+        target: "state_start_refund"
+      # 其他情况也回到入口，由入口重新判断是否需要进入退款流程
+      - target: "state_start_refund"

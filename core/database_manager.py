@@ -574,6 +574,34 @@ class DatabaseManager:
 
         return [dict(row) for row in rows]
 
+    def search_user_orders(self, user_id: str, keyword: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        按商品名称关键字模糊查询用户订单
+
+        Args:
+            user_id: 用户ID
+            keyword: 关键字（例如“水杯”“马克杯”“耳机”等）
+            limit: 返回的最大订单数
+        """
+        if not keyword:
+            return []
+
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT * FROM orders
+            WHERE user_id = ? AND product_name LIKE ?
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (user_id, f"%{keyword}%", limit),
+        )
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+
     def update_order_status(self, order_id: str, status: str, tracking_number: Optional[str] = None) -> bool:
         """更新订单状态"""
         try:

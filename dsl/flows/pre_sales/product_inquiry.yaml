@@ -6,8 +6,13 @@ states:
     triggers:
       - type: regex
         value: ".*(了解|介绍|咨询|看看|推荐).*(产品|商品).*"
+      - type: regex
+        value: ".*(商品|产品).*信息.*"
+      - type: regex
+        value: ".*(买|购买|下单).*(耳机|商品|产品).*"
+      - type: regex
+        value: ".*(想买|想下单|想要).*(耳机|商品|产品).*"
     actions:
-      # 使用数据库查询获取所有产品列表
       - type: api_call
         endpoint: "database://products/list"
         params:
@@ -20,37 +25,26 @@ states:
 
           请告诉我您对哪款产品感兴趣，或者直接说出产品名称。
     transitions:
-      - target: "state_collect_product_choice"
-
-  - id: "state_collect_product_choice"
-    actions:
-      - type: wait_for_input
-    transitions:
-      # 耳机相关
       - condition:
           all:
             - type: regex
               value: ".*(耳机|headset|蓝牙).*"
         target: "state_show_product_P001"
-      # 手环相关
       - condition:
           all:
             - type: regex
               value: ".*(手环|band|智能穿戴).*"
         target: "state_show_product_P002"
-      # 充电宝相关
       - condition:
           all:
             - type: regex
               value: ".*(充电宝|移动电源|power.*bank).*"
         target: "state_show_product_P003"
-      # 键盘相关
       - condition:
           all:
             - type: regex
               value: ".*(键盘|keyboard|机械键盘).*"
         target: "state_show_product_P004"
-      # 摄像头相关
       - condition:
           all:
             - type: regex
@@ -58,26 +52,24 @@ states:
         target: "state_show_product_P005"
       - target: "state_product_search"
 
-  # 如果没有匹配，尝试搜索
   - id: "state_product_search"
     actions:
-      - type: set_variable
-        scope: session
-        key: "search_keyword"
-        value: "{{session.last_user_input}}"
+      - type: extract_variable
+        source: user_input
+        regex: "(?P<keyword>.+)"
+        target: "session.keyword"
       - type: api_call
         endpoint: "database://products/search"
         params:
-          keyword: "{{session.search_keyword}}"
+          keyword: "{{session.keyword}}"
         save_to: "session.search_results"
       - type: respond
         text: |
-          让我为您搜索一下...
+          让我为您搜索一下…
           {{session.search_result_text}}
     transitions:
       - target: "state_end_inquiry"
 
-  # 展示具体产品 - P001 无线蓝牙耳机Pro
   - id: "state_show_product_P001"
     actions:
       - type: api_call
@@ -111,7 +103,6 @@ states:
         target: "state_start_inquiry"
       - target: "state_end_inquiry"
 
-  # 展示具体产品 - P002 智能手环Max
   - id: "state_show_product_P002"
     actions:
       - type: api_call
@@ -136,7 +127,6 @@ states:
         target: "state_confirm_purchase"
       - target: "state_end_inquiry"
 
-  # 展示具体产品 - P003 充电宝
   - id: "state_show_product_P003"
     actions:
       - type: api_call
@@ -161,7 +151,6 @@ states:
         target: "state_confirm_purchase"
       - target: "state_end_inquiry"
 
-  # 展示具体产品 - P004 机械键盘
   - id: "state_show_product_P004"
     actions:
       - type: api_call
@@ -186,7 +175,6 @@ states:
         target: "state_confirm_purchase"
       - target: "state_end_inquiry"
 
-  # 展示具体产品 - P005 摄像头
   - id: "state_show_product_P005"
     actions:
       - type: api_call
@@ -211,7 +199,6 @@ states:
         target: "state_confirm_purchase"
       - target: "state_end_inquiry"
 
-  # 确认购买
   - id: "state_confirm_purchase"
     actions:
       - type: respond
@@ -220,7 +207,7 @@ states:
           单价：¥{{session.current_product.price}}
 
           由于这是演示系统，实际购买流程需要跳转到订单系统。
-          您可以说"查看我的订单"来查看已有订单状态。
+          您可以说“查看我的订单”来查看已有订单状态。
 
           还有其他需要了解的吗？
     transitions:
@@ -230,3 +217,20 @@ states:
     actions:
       - type: respond
         text: "如果您还有其他问题，随时可以问我。祝您购物愉快！"
+    transitions:
+      # 如果当前会话中已经有选中的商品，并且用户表达了购买意图，则直接进入购买确认
+      - condition:
+          all:
+            - type: variable_exists
+              variable: "current_product"
+            - type: regex
+              value: ".*(买|购买|下单|要).*"
+        target: "state_confirm_purchase"
+      # 如果用户继续提到商品/产品相关内容，则回到售前入口，重新进入产品咨询流程
+      - condition:
+          all:
+            - type: regex
+              value: ".*(商品|产品|耳机|手环|充电宝|键盘|摄像头).*"
+        target: "state_start_inquiry"
+      # 兜底：其他任意输入也回到售前入口，由入口重新分发
+      - target: "state_start_inquiry"

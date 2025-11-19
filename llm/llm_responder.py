@@ -35,7 +35,12 @@ class LLMResponder:
             timeout=self.timeout
         )
 
-    def recognize_intent(self, user_input: str, available_intents: Optional[List[str]] = None) -> Dict[str, Any]:
+    def recognize_intent(
+        self,
+        user_input: str,
+        available_intents: Optional[List[str]] = None,
+        session_context: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """
         识别用户输入的意图
 
@@ -53,6 +58,22 @@ class LLMResponder:
         """
         # 构建提示词
         intent_list = "\n".join([f"- {intent}" for intent in (available_intents or [])])
+
+        context_info = ""
+        if session_context:
+            # 只保留与意图识别强相关的简要上下文，避免提示过长
+            slim_context: Dict[str, Any] = {}
+            active_flow = session_context.get("active_flow_name")
+            if active_flow:
+                slim_context["active_flow_name"] = active_flow
+            # 最近几轮用户输入
+            history = session_context.get("user_history") or []
+            if history:
+                # 只取最近3条，避免过长
+                slim_context["recent_user_inputs"] = history[-3:]
+
+            if slim_context:
+                context_info = f"\n\n对话上下文（最近几轮）：\n{json.dumps(slim_context, ensure_ascii=False, indent=2)}"
 
         system_prompt = """你是一个智能客服机器人的意图识别系统。
 你的任务是分析用户输入，识别用户的意图类型。
@@ -78,7 +99,7 @@ class LLMResponder:
 返回：{"intent": "订单查询", "confidence": 0.95, "entities": {"order_id": "A1234567890"}, "reasoning": "用户明确提到查询订单和物流信息"}
 """
 
-        user_prompt = f"用户输入：{user_input}\n\n请分析用户意图。"
+        user_prompt = f"用户当前输入：{user_input}{context_info}\n\n可选意图列表：\n{intent_list}\n\n请分析用户意图。"
 
         try:
             # 调用OpenAI API（使用新版客户端）

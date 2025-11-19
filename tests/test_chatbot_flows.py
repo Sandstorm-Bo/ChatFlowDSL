@@ -17,7 +17,7 @@ class _QueueLLMResponder:
     def set_next_intent(self, intent: str):
         self.next_intent = intent
 
-    def recognize_intent(self, user_input: str, available_intents=None):
+    def recognize_intent(self, user_input: str, available_intents=None, session_context=None):
         return {
             "intent": self.next_intent,
             "confidence": 0.9,
@@ -56,7 +56,7 @@ class TestLLMIntentFlowSelection(unittest.TestCase):
             "售中订单管理流程": "用户想查询订单状态、查看物流信息、取消订单",
             "标准退款流程": "用户想申请退款或退货、反馈商品质量问题",
             "发票服务流程": "用户需要开具发票、提供发票抬头和税号",
-            "耳机故障排查流程": "用户反馈耳机故障、设备连接问题、需要技术支持",
+            "设备故障排查流程": "用户反馈耳机、手环、键盘、摄像头等设备异常，寻求排查或售后",
             "通用闲聊流程": "用户打招呼、闲聊、问候",
         }
 

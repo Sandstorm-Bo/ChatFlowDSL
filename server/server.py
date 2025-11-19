@@ -9,12 +9,14 @@ import threading
 import json
 import sys
 import os
+import yaml
 
 # 添加项目根目录到Python路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.chatbot import Chatbot
 from core.database_manager import DatabaseManager
+from llm.llm_responder import LLMResponder
 
 
 class ChatServer:
@@ -39,7 +41,12 @@ class ChatServer:
         self.host = host
         self.port = port
         self.server_socket = None
-        self.chatbot = Chatbot()
+
+        # 从配置文件加载LLM配置
+        llm_responder = self._init_llm_responder()
+
+        # 初始化聊天机器人（传入LLM响应器）
+        self.chatbot = Chatbot(llm_responder=llm_responder)
         self.db = DatabaseManager()  # 数据库管理器，用于用户认证
         self.running = False
         self.clients = {}  # 存储活跃的客户端连接 {session_id: (conn, addr)}
@@ -48,6 +55,61 @@ class ChatServer:
 
         print(f"[服务器] 初始化完成")
         print(f"[服务器] 已加载 {len(self.chatbot.flows)} 个业务流程")
+
+    def _init_llm_responder(self):
+        """
+        从配置文件初始化LLM响应器
+
+        Returns:
+            LLMResponder实例，如果配置不存在或配置为纯规则模式则返回None
+        """
+        try:
+            # 读取配置文件
+            config_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                "config",
+                "config.yaml"
+            )
+
+            if not os.path.exists(config_path):
+                print(f"[服务器] 警告: 配置文件不存在 {config_path}")
+                print(f"[服务器] 将以纯规则模式运行")
+                return None
+
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+
+            # 检查运行模式
+            mode = config.get("mode", "rule")
+            if mode == "rule":
+                print(f"[服务器] 运行模式: 纯规则模式")
+                return None
+
+            # 获取LLM配置
+            llm_config = config.get("llm", {})
+            api_key = llm_config.get("api_key", "")
+
+            if not api_key or api_key.startswith("请替换"):
+                print(f"[服务器] 警告: LLM API Key未配置")
+                print(f"[服务器] 将以纯规则模式运行")
+                return None
+
+            # 初始化LLM响应器
+            llm_responder = LLMResponder(
+                api_key=api_key,
+                model_name=llm_config.get("model_name", "gpt-3.5-turbo"),
+                base_url=llm_config.get("base_url"),
+                timeout=llm_config.get("timeout", 30)
+            )
+
+            print(f"[服务器] 运行模式: {mode}")
+            print(f"[服务器] LLM模型: {llm_config.get('model_name', 'gpt-3.5-turbo')}")
+            return llm_responder
+
+        except Exception as e:
+            print(f"[服务器] 初始化LLM响应器失败: {e}")
+            print(f"[服务器] 将以纯规则模式运行")
+            return None
 
     def start(self):
         """启动服务器，开始监听客户端连接"""

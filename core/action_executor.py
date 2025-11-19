@@ -149,6 +149,22 @@ class ActionExecutor:
                     user_id = params.get("user_id", "U001")  # 降级到参数或默认用户
                 return self.db.get_user_orders(user_id)
 
+            elif path == "orders/search":
+                # 根据用户提供的商品关键词、描述信息模糊查询订单
+                user_id = self._get_session_value(session, "user_id")
+                if not user_id:
+                    user_id = params.get("user_id", "U001")
+
+                keyword = params.get("keyword", "")
+                if not keyword:
+                    variables = self._get_variables(session)
+                    keyword = variables.get("order_keyword", "")
+
+                if not keyword:
+                    return []
+
+                return self.db.search_user_orders(user_id=user_id, keyword=keyword)
+
             # 退款相关查询
             elif path == "refunds/check":
                 order_id = params.get("order_id")

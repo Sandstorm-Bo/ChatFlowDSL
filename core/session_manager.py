@@ -11,6 +11,8 @@ class Session:
         self.current_state_id: Optional[str] = None
         self.variables: Dict[str, Any] = {}
         self.last_user_input: Optional[str] = None
+        # 保存最近若干轮用户输入，用于LLM意图识别的上下文
+        self.user_history: list[str] = []
         self.created_at: float = time.time()  # 会话创建时间
         self.last_active: float = time.time()  # 最后活跃时间
 
@@ -44,6 +46,7 @@ class Session:
             "current_state_id": self.current_state_id,
             "variables": self.variables,
             "last_user_input": self.last_user_input,
+            "user_history": self.user_history,
         }
 
 class SessionManager:

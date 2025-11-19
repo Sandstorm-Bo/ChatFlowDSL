@@ -5,7 +5,7 @@ states:
   - id: "state_start_chitchat"
     triggers:
       - type: regex
-        value: "^(你好|您好|hi|hello)$"
+        value: ".*(你好|您好|hi|hello).*"
     actions:
       - type: respond
         text: "您好！有什么可以为您效劳的吗？我可以帮您：\n- 查询商品信息\n- 查看订单状态\n- 处理退款退货\n- 申请发票\n- 解决设备故障"

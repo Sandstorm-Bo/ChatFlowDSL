@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import re
 from dsl.dsl_parser import DslParser, ChatFlow
 from core.session_manager import Session
@@ -11,8 +11,18 @@ class Interpreter:
         self.llm_responder = llm_responder  # 可选的LLM响应器，用于语义理解
 
     def process(self, session: Session, user_input: str) -> List[Dict[str, Any]]:
+        """向后兼容的处理方法，仅返回动作列表。"""
+        actions, _ = self.process_with_match(session, user_input)
+        return actions
+
+    def process_with_match(self, session: Session, user_input: str) -> Tuple[List[Dict[str, Any]], bool]:
         """
         处理用户输入，并根据当前状态和转换规则决定下一步的动作。
+
+        Returns:
+            (actions, matched)
+            - actions: 下一状态的动作列表，或默认兜底动作
+            - matched: 是否在当前流程中找到匹配的转换（包括兜底转换）
         """
         # 如果 session 没有当前状态 (比如是新 session)，则从流程入口点开始
         if not session.current_state_id:
@@ -21,7 +31,7 @@ class Interpreter:
         current_state_id = session.current_state_id
         current_state = self.chat_flow.get_state(current_state_id)
         if not current_state:
-            return [{"type": "respond", "text": f"错误：找不到状态 {current_state_id}。"}]
+            return [{"type": "respond", "text": f"错误：找不到状态 {current_state_id}。"}], False
 
         print(f"[Interpreter] 当前状态: {current_state_id}")
 
@@ -58,13 +68,13 @@ class Interpreter:
             if next_state:
                 actions = next_state.get("actions", [])
                 print(f"[Interpreter] 返回 {len(actions)} 个动作")
-                return actions
+                return actions, True
             else:
-                return [{"type": "respond", "text": f"错误：找不到目标状态 {next_state_id}。"}]
+                return [{"type": "respond", "text": f"错误：找不到目标状态 {next_state_id}。"}], False
 
         # 如果没有找到任何匹配的转换
         print(f"[Interpreter] 警告：没有找到任何匹配的转换，返回默认响应")
-        return [{"type": "respond", "text": "抱歉，我不知道如何回应。"}]
+        return [{"type": "respond", "text": "抱歉，我不知道如何回应。"}], False
 
     def _is_condition_met(self, condition: Optional[Dict[str, Any]], user_input: str, session: Session = None) -> bool:
         """

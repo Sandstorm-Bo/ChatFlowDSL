@@ -1,6 +1,6 @@
 import os
 import re
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 import yaml
 
 from dsl.dsl_parser import DslParser, ChatFlow
@@ -55,6 +55,11 @@ class Chatbot:
         intent_map = {}
         for flow_name in self.flows.keys():
             intent_map[flow_name] = default_intents.get(flow_name, f"与{flow_name}相关的咨询")
+
+        # 兼容旧名称：将“耳机故障排查流程”的描述也映射到“设备故障排查流程”
+        # 旧版本兼容：如果 DSL 仍然使用“耳机故障排查流程”的名称，保留对应描述
+        if "耳机故障排查流程" in intent_map and "设备故障排查流程" not in intent_map:
+            intent_map["设备故障排查流程"] = intent_map["耳机故障排查流程"]
 
         return intent_map
 
@@ -151,7 +156,12 @@ class Chatbot:
                 return None
 
             # 尝试从LLM返回的意图中提取流程名称
-            # 方法1：检查流程名称是否直接出现在返回的意图中
+            # ① 完全匹配描述
+            for flow_name, description in self.flow_intents.items():
+                if intent == description:
+                    print(f"  [OK] [LLM匹配成功] 触发流程: '{flow_name}'")
+                    return flow_name
+            # ② 流程名称直接出现在意图中
             for flow_name in self.flow_intents.keys():
                 if flow_name in intent:
                     print(f"  [OK] [LLM匹配成功] 触发流程: '{flow_name}'")
@@ -184,6 +194,26 @@ class Chatbot:
         except Exception as e:
             print(f"  [ERROR] [LLM匹配异常] {type(e).__name__}: {str(e)}")
             return None
+
+    def _detect_intent_flow(self, user_input: str, session: Optional[Session]) -> Tuple[Optional[str], Optional[str]]:
+        """
+        综合使用规则和 LLM 识别用户意图所属流程。
+
+        Returns:
+            (flow_name, source) 其中 source ∈ {"rule", "llm", None}
+        """
+        rule_flow = self._try_rule_based_trigger(user_input)
+        llm_flow = self._try_llm_based_trigger(user_input, session)
+
+        if llm_flow:
+            if rule_flow and rule_flow != llm_flow:
+                print(f"[意图路由] LLM 结果 '{llm_flow}' 覆盖规则匹配 '{rule_flow}'")
+            return llm_flow, "llm"
+
+        if rule_flow:
+            return rule_flow, "rule"
+
+        return None, None
 
     def _generate_fallback_response(self, user_input: str) -> str:
         """
@@ -244,9 +274,9 @@ class Chatbot:
 
         active_flow_name = session.get("active_flow_name")
 
-        # ==================== 全局流程切换机制 ====================
-        # 【核心改进】无论当前是否在某个流程中，都尝试匹配新流程
-        # 这解决了"通用闲聊流程死锁"问题，允许用户随时切换到其他业务流程
+        # ==================== 流程处理顺序 ====================
+        # 1. 若当前流程能够处理本轮输入，则优先在当前流程内完成状态转换和回复
+        # 2. 若当前流程无法处理，则再尝试全局流程匹配（规则优先 + LLM兜底）
 
         print(f"\n{'='*70}")
         print(f"[流程匹配] 用户输入: '{user_input}'")
@@ -254,57 +284,48 @@ class Chatbot:
             print(f"[当前流程] {active_flow_name}")
         print(f"{'='*70}")
 
-        # Step 1: 优先尝试规则匹配（全局）
-        matched_flow_name = self._try_rule_based_trigger(user_input)
+        # 综合使用规则 + LLM 识别本轮意图所属流程
+        intent_flow_name, intent_source = self._detect_intent_flow(user_input, session)
 
-        # Step 2: 规则匹配失败，尝试LLM语义理解（兜底）
-        if not matched_flow_name:
-            matched_flow_name = self._try_llm_based_trigger(user_input, session)
+        actions: List[Dict] = []
+        handled_in_current_flow = False
 
-        # Step 3: 处理流程切换逻辑
-        if matched_flow_name:
-            # 检查是否需要切换流程
-            if matched_flow_name != active_flow_name:
-                # 流程切换：从当前流程切换到新流程
-                if active_flow_name:
-                    print(f"[流程切换] 从 '{active_flow_name}' 切换到 '{matched_flow_name}'")
-                else:
-                    print(f"[流程启动] 启动流程: '{matched_flow_name}'")
+        # Step 0: 若用户在其他业务上有更强烈的意图，允许直接切换
+        # 注意：为避免“刚进入流程就连跳两步”（如商品咨询入口立刻触发搜索），
+        # 此处只执行目标流程的入口动作，不在同一轮里再次用当前输入驱动状态机。
+        if active_flow_name and intent_flow_name and intent_flow_name != active_flow_name:
+            print(f"[跨流程跳转] 用户意图更偏向 '{intent_flow_name}'（来源: {intent_source or 'unknown'}），立即切换")
+            entry_actions, _ = self._activate_flow(session, intent_flow_name)
+            actions.extend(entry_actions)
+            handled_in_current_flow = True
+            active_flow_name = intent_flow_name
 
-                session.set("active_flow_name", matched_flow_name)
-                interpreter = self.interpreters[matched_flow_name]
-                flow = self.flows[matched_flow_name]
-                # 获取新流程的初始动作
-                actions = interpreter.get_initial_actions()
-                session.current_state_id = flow.entry_point
-            else:
-                # 相同流程：继续当前流程
-                print(f"[流程继续] 继续流程: '{active_flow_name}'")
-                interpreter = self.interpreters[active_flow_name]
-                actions = interpreter.process(session, user_input)
-
-                # 检查流程是否结束
-                next_state = self.flows[active_flow_name].get_state(session.current_state_id)
-                if "end" in session.current_state_id and not next_state.get("actions"):
-                    session.set("active_flow_name", None)
-                    print(f"[流程结束] 流程'{active_flow_name}'已结束")
-
-        elif active_flow_name:
-            # 没有匹配到新流程，但有活跃流程：继续当前流程
-            print(f"[流程继续] 未匹配到新流程，继续当前流程: '{active_flow_name}'")
+        # Step 1: 若未触发跨流程跳转，继续在当前流程内尝试
+        if not handled_in_current_flow and active_flow_name:
+            print(f"[流程继续] 尝试在当前流程 '{active_flow_name}' 内处理输入")
             interpreter = self.interpreters[active_flow_name]
-            actions = interpreter.process(session, user_input)
+            actions_in_flow, matched = interpreter.process_with_match(session, user_input)
+            if matched:
+                handled_in_current_flow = True
+                actions = actions_in_flow
 
-            # 检查流程是否结束
-            next_state = self.flows[active_flow_name].get_state(session.current_state_id)
-            if "end" in session.current_state_id and not next_state.get("actions"):
-                session.set("active_flow_name", None)
-                print(f"[流程结束] 流程'{active_flow_name}'已结束")
+        # Step 2: 当前流程无法处理，则再依据意图结果进行全局匹配
+        if not handled_in_current_flow:
+            if intent_flow_name:
+                if intent_flow_name != active_flow_name:
+                    if active_flow_name:
+                        print(f"[流程切换] 从 '{active_flow_name}' 切换到 '{intent_flow_name}'（来源: {intent_source or 'unknown'}）")
+                    else:
+                        print(f"[流程启动] 启动流程: '{intent_flow_name}'（来源: {intent_source or 'unknown'}）")
 
-        else:
-            # 既没有匹配到新流程，也没有活跃流程
-            print(f"[流程匹配失败] 无法理解用户意图")
-            actions = []
+                    actions, _ = self._activate_flow(session, intent_flow_name)
+                else:
+                    print(f"[流程继续] 继续流程: '{active_flow_name}'（由全局匹配触发，来源: {intent_source or 'unknown'}）")
+                    interpreter = self.interpreters[active_flow_name]
+                    actions, _ = interpreter.process_with_match(session, user_input)
+            else:
+                print(f"[流程匹配失败] 无法理解用户意图")
+                actions = []
 
         print(f"{'='*70}\n")
 
@@ -323,3 +344,14 @@ class Chatbot:
             return [fallback_response]
 
         return responses
+
+    def _activate_flow(self, session: Session, flow_name: str) -> Tuple[List[Dict], Interpreter]:
+        """
+        激活指定流程并返回入口动作和对应解释器，便于后续继续处理。
+        """
+        session.set("active_flow_name", flow_name)
+        interpreter = self.interpreters[flow_name]
+        flow = self.flows[flow_name]
+        session.current_state_id = flow.entry_point
+        entry_actions = interpreter.get_initial_actions()
+        return entry_actions, interpreter

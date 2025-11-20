@@ -6,6 +6,12 @@ states:
     triggers:
       - type: regex
         value: ".*(发票|invoice).*"
+      - type: regex
+        value: ".*(开票|开发票|开个票|开张票|开增值税|增值税发票|电子发票|纸质发票).*"
+      - type: regex
+        value: ".*(要票|要发票|打票|打发票|票据|小票|报销).*"
+      - type: regex
+        value: ".*(receipt|bill).*"
     actions:
       - type: respond
         text: "您好，需要为您申请开具发票吗？请提供需要开票的订单号。"
@@ -39,8 +45,9 @@ states:
         regex: "(?P<order_id>[A-Z0-9]{10,})"
         target: "session.order_id"
       - type: api_call
-        method: GET
-        url: "https://api.my-shop.com/orders/{{session.order_id}}/invoice_check"
+        endpoint: "database://invoices/check_eligibility"
+        params:
+          order_id: "{{session.order_id}}"
         save_to: "session.invoice_check"
     transitions:
       - condition:
@@ -94,15 +101,18 @@ states:
         regex: "抬头:(?P<title>.*),.*税号:(?P<tax_id>.*)"
         target: "session.invoice_info" # 会存成一个字典
       - type: api_call
-        method: POST
-        url: "https://api.my-shop.com/invoices"
-        payload:
+        endpoint: "database://invoices/create"
+        params:
           order_id: "{{session.order_id}}"
+          user_id: "{{session.user_id}}"
           title: "{{session.invoice_info.title}}"
           tax_id: "{{session.invoice_info.tax_id}}"
+          amount: "{{session.invoice_check.order.total_price if session.invoice_check.order else 0}}"
         save_to: "session.invoice_result"
       - type: respond
-        text: "您的发票申请已提交，预计处理时间为24小时。申请结果：{{session.invoice_result.message}}。"
+        text: |
+          {{session.invoice_result.message}}
+          发票编号：{{session.invoice_result.invoice_id}}
     transitions:
       - target: "state_end_invoice"
 

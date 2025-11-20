@@ -1,11 +1,15 @@
-name: "耳机故障排查流程"
+name: "设备故障排查流程"
 entry_point: "state_start_troubleshooting"
 
 states:
   - id: "state_start_troubleshooting"
     triggers:
       - type: regex
-        value: ".*(耳机|headset).*(连不上|没声音|坏了|问题).*"
+        value: ".*(耳机|headset).*(连不上|没声音|坏了|有问题|故障).*"
+      - type: regex
+        value: ".*(蓝牙耳机|蓝牙).*(连不上|连接不上|配对不了|配不上|断开|经常断线).*"
+      - type: regex
+        value: ".*(耳机|headset).*(杂音|有噪音|有电流声|听不清|声音小|一边有声一边没声).*"
     actions:
       - type: respond
         text: "很抱歉您的耳机遇到了问题。为了帮您定位问题，请问耳机开机后，指示灯是否正常闪烁？（可以回答“灯在闪烁”或“灯不亮”）"
@@ -101,7 +105,7 @@ states:
   - id: "state_fallback_options"
     actions:
       - type: respond
-        text: "抱歉，我不太理解您的描述。当前耳机故障排查流程只支持排查“连不上、没声音、电量问题”等。如果耳机无法正常使用，您可以回复【申请售后】为您处理。"
+        text: "抱歉，我不太理解您的描述。当前设备故障排查流程只支持排查“连不上、没声音、电量问题”等。如果设备无法正常使用，您可以回复【申请售后】为您处理。"
     transitions:
       - condition:
           all:

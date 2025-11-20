@@ -6,6 +6,10 @@ states:
     triggers:
       - type: regex
         value: ".*(订单|物流|快递|发货|配送).*"
+      - type: regex
+        value: ".*(查|查询|查看|看看|看下|看一下).*(订单|物流|快递|包裹|快件|运单).*"
+      - type: regex
+        value: ".*(order|shipping|delivery|track).*(status|信息|情况).*"
     actions:
       - type: respond
         text: |
@@ -188,14 +192,17 @@ states:
 
   - id: "state_cancel_order"
     actions:
+      - type: api_call
+        endpoint: "database://orders/update_status"
+        params:
+          order_id: "{{session.order_id}}"
+          status: "cancelled"
+        save_to: "session.cancel_result"
       - type: respond
         text: |
-          正在为您取消订单...
-
-          订单 {{session.order_id}} 已成功取消！
-          退款将在3-5个工作日内原路返回。
-
-          如有疑问，请随时联系客服。
+          {{'订单取消成功' if session.cancel_result.success else '订单取消失败'}}
+          订单 {{session.order_id}} 状态已更新。
+          {{'退款将在3-5个工作日内原路返回。' if session.cancel_result.success else '请稍后重试或联系人工客服。'}}
     transitions:
       - target: "state_end_order_management"
 
@@ -220,6 +227,11 @@ states:
 
           请重新输入您的订单号，或者说“查看我的订单”。
     transitions:
+      - condition:
+          all:
+            - type: regex
+              value: "[A-Z][0-9]{10}"
+        target: "state_query_specific_order"
       - target: "state_collect_order_info"
 
   - id: "state_end_order_management"

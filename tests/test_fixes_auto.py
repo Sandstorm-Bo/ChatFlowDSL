@@ -6,17 +6,18 @@ import sys
 import os
 
 # 添加项目根目录到Python路径
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT_DIR)
 
-from core.chatbot import Chatbot
-from core.database_manager import DatabaseManager
+from core.chatbot import Chatbot  # noqa: E402
+from core.database_manager import DatabaseManager  # noqa: E402
 
 
 def test_flow_switching():
     """测试1: 全局流程切换功能"""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("测试1: 全局流程切换功能（修复通用闲聊死锁）")
-    print("="*80)
+    print("=" * 80)
 
     chatbot = Chatbot(flows_dir="dsl/flows")
     session_id = "test-flow-switching"
@@ -26,23 +27,23 @@ def test_flow_switching():
         {
             "input": "你好",
             "expected_flow": "通用闲聊流程",
-            "description": "触发通用闲聊流程"
+            "description": "触发通用闲聊流程",
         },
         {
             "input": "我是谁",
             "expected_flow": "通用闲聊流程",
-            "description": "继续通用闲聊流程"
+            "description": "继续通用闲聊流程",
         },
         {
             "input": "查询订单",
             "expected_flow": "订单管理流程",
-            "description": "从闲聊切换到订单管理（关键测试）"
+            "description": "从闲聊切换到订单管理（关键测试）",
         },
         {
             "input": "咨询产品",
             "expected_flow": "产品咨询流程",
-            "description": "从订单管理切换到产品咨询"
-        }
+            "description": "从订单管理切换到产品咨询",
+        },
     ]
 
     passed = 0
@@ -80,14 +81,15 @@ def test_flow_switching():
 
 def test_user_registration():
     """测试2: 用户注册功能"""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("测试2: 用户注册功能")
-    print("="*80)
+    print("=" * 80)
 
     db = DatabaseManager()
 
     # 生成唯一用户名避免冲突
     import time
+
     username = f"test_user_{int(time.time())}"
 
     test_cases = [
@@ -97,28 +99,27 @@ def test_user_registration():
                 username=username,
                 password="test123",
                 phone="13912345678",
-                email=f"{username}@test.com"
+                email=f"{username}@test.com",
             ),
-            "expected_success": True
+            "expected_success": True,
         },
         {
             "name": "验证新用户可以登录",
             "action": lambda: db.authenticate_user(username, "test123"),
-            "expected_success": True
+            "expected_success": True,
         },
         {
             "name": "重复注册应该失败",
             "action": lambda: db.register_user(
-                username=username,
-                password="another_password"
+                username=username, password="another_password"
             ),
-            "expected_success": False
+            "expected_success": False,
         },
         {
             "name": "错误密码登录应该失败",
             "action": lambda: db.authenticate_user(username, "wrong_password"),
-            "expected_success": False
-        }
+            "expected_success": False,
+        },
     ]
 
     passed = 0
@@ -139,7 +140,9 @@ def test_user_registration():
                 print(f"  [通过]")
                 passed += 1
             else:
-                print(f"  [失败] 预期 {'成功' if case['expected_success'] else '失败'}，实际 {'成功' if success else '失败'}")
+                print(
+                    f"  [失败] 预期 {'成功' if case['expected_success'] else '失败'}，实际 {'成功' if success else '失败'}"
+                )
                 failed += 1
         else:
             # authenticate_user返回user_data或None
@@ -149,7 +152,9 @@ def test_user_registration():
                 print(f"  [通过]")
                 passed += 1
             else:
-                print(f"  [失败] 预期 {'成功' if case['expected_success'] else '失败'}，实际 {'成功' if success else '失败'}")
+                print(
+                    f"  [失败] 预期 {'成功' if case['expected_success'] else '失败'}，实际 {'成功' if success else '失败'}"
+                )
                 failed += 1
 
     print(f"\n{'='*80}")
@@ -161,9 +166,9 @@ def test_user_registration():
 
 def test_user_specific_query():
     """测试3: 基于用户身份的智能查询"""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("测试3: 基于用户身份的智能查询")
-    print("="*80)
+    print("=" * 80)
 
     chatbot = Chatbot(flows_dir="dsl/flows")
     db = DatabaseManager()
@@ -172,7 +177,7 @@ def test_user_specific_query():
     test_users = [
         {"user_id": "U001", "username": "张三", "expected_orders": 2},
         {"user_id": "U002", "username": "李四", "expected_orders": 1},
-        {"user_id": "U003", "username": "王五", "expected_orders": 0}
+        {"user_id": "U003", "username": "王五", "expected_orders": 0},
     ]
 
     passed = 0
@@ -204,9 +209,9 @@ def test_user_specific_query():
 
 def main():
     print("\n")
-    print("╔" + "═"*78 + "╗")
-    print("║" + " "*25 + "自动化测试 - 功能修复验证" + " "*25 + "║")
-    print("╚" + "═"*78 + "╝")
+    print("╔" + "═" * 78 + "╗")
+    print("║" + " " * 25 + "自动化测试 - 功能修复验证" + " " * 25 + "║")
+    print("╚" + "═" * 78 + "╝")
 
     results = []
 
@@ -218,9 +223,9 @@ def main():
     results.append(("智能用户查询", test_user_specific_query()))
 
     # 总结
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("总体测试结果")
-    print("="*80)
+    print("=" * 80)
 
     total_passed = sum(1 for _, passed in results if passed)
     total_tests = len(results)
@@ -245,3 +250,4 @@ def main():
 
 if __name__ == "__main__":
     exit(main())
+

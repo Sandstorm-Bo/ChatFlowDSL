@@ -12,6 +12,10 @@ states:
         value: ".*(买|购买|下单).*(耳机|商品|产品).*"
       - type: regex
         value: ".*(想买|想下单|想要).*(耳机|商品|产品).*"
+      - type: regex
+        value: ".*(耳机|商品|产品).*(怎么样|好不好|行不行|推荐一下|推荐下|推荐一个).*"
+      - type: regex
+        value: ".*有.*(耳机|商品|产品).*(推荐|合适|适合).*"
     actions:
       - type: api_call
         endpoint: "database://products/list"
@@ -67,7 +71,57 @@ states:
         text: |
           让我为您搜索一下…
           {{session.search_result_text}}
+
+          如果您想了解其中某款，请直接说出商品名称，
+          例如“平板电脑 12”；也可以说“第一个/第二个”或“价格是 2419 的那款”。
+          若没找到合适的，也可以告诉我新的关键词，我再帮您查。
     transitions:
+      # 搜索完成后，下一轮用户输入直接用于在当前结果中选中具体商品
+      - target: "state_select_from_results"
+
+  - id: "state_select_from_results"
+    actions:
+      - type: select_product_from_results
+    transitions:
+      - condition:
+          all:
+            - type: variable_equals
+              variable: "product_selected"
+              value: true
+        target: "state_show_current_product"
+      - condition:
+          all:
+            - type: regex
+              value: ".*(其他|换一个|再看看|换款|换一种).*"
+        target: "state_start_inquiry"
+      - target: "state_product_search"
+
+  - id: "state_show_current_product"
+    actions:
+      - type: respond
+        text: |
+          【{{session.current_product.name}}】
+          💰 价格：¥{{session.current_product.price}}
+          📦 库存：{{session.current_product.stock}} 件
+
+          产品特点：
+          {{session.current_product.features}}
+
+          产品描述：
+          {{session.current_product.description}}
+
+          如果您想购买，可以直接说“买这款”或“下单”；如果想再了解别的产品，也可以告诉我新的需求。
+    transitions:
+      - condition:
+          all:
+            - type: regex
+              value: ".*(购买|下单|买|要|入手|来一个|来一台|整一个|买这款).*"
+        target: "state_confirm_purchase"
+      - condition:
+          all:
+            - type: regex
+              value: ".*(其他|换一个|再看看|换款|换一种).*"
+        target: "state_start_inquiry"
       - target: "state_end_inquiry"
 
   - id: "state_show_product_P001"
@@ -94,8 +148,13 @@ states:
       - condition:
           all:
             - type: regex
-              value: ".*(购买|下单|买|要).*"
+              value: ".*(购买|下单|买|要|入手|来一个|来一台|整一个).*"
         target: "state_confirm_purchase"
+      - condition:
+          all:
+            - type: regex
+              value: ".*(看看|了解|其他|还有|更多|详细|保修|质保|售后|活动|优惠|折扣|销量).*"
+        target: "state_product_more_info"
       - condition:
           all:
             - type: regex
@@ -123,8 +182,13 @@ states:
       - condition:
           all:
             - type: regex
-              value: ".*(购买|下单|买|要).*"
+              value: ".*(购买|下单|买|要|入手|来一个|来一台|整一个).*"
         target: "state_confirm_purchase"
+      - condition:
+          all:
+            - type: regex
+              value: ".*(更多|详细|保修|质保|售后|活动|优惠|折扣|销量).*"
+        target: "state_product_more_info"
       - target: "state_end_inquiry"
 
   - id: "state_show_product_P003"
@@ -147,8 +211,13 @@ states:
       - condition:
           all:
             - type: regex
-              value: ".*(购买|下单|买|要).*"
+              value: ".*(购买|下单|买|要|入手|来一个|来一台|整一个).*"
         target: "state_confirm_purchase"
+      - condition:
+          all:
+            - type: regex
+              value: ".*(更多|详细|保修|质保|售后|活动|优惠|折扣|销量).*"
+        target: "state_product_more_info"
       - target: "state_end_inquiry"
 
   - id: "state_show_product_P004"
@@ -171,8 +240,13 @@ states:
       - condition:
           all:
             - type: regex
-              value: ".*(购买|下单|买|要).*"
+              value: ".*(购买|下单|买|要|入手|来一个|来一台|整一个).*"
         target: "state_confirm_purchase"
+      - condition:
+          all:
+            - type: regex
+              value: ".*(更多|详细|保修|质保|售后|活动|优惠|折扣|销量).*"
+        target: "state_product_more_info"
       - target: "state_end_inquiry"
 
   - id: "state_show_product_P005"
@@ -195,21 +269,44 @@ states:
       - condition:
           all:
             - type: regex
-              value: ".*(购买|下单|买|要).*"
+              value: ".*(购买|下单|买|要|入手|来一个|来一台|整一个).*"
         target: "state_confirm_purchase"
+      - condition:
+          all:
+            - type: regex
+              value: ".*(更多|详细|保修|质保|售后|活动|优惠|折扣|销量).*"
+        target: "state_product_more_info"
+      - target: "state_end_inquiry"
+
+  - id: "state_product_more_info"
+    actions:
+      - type: respond
+        text: |
+          关于【{{session.current_product.name}}】的更多信息：
+          - 保修与售后：本产品享受国家规定的“三包”服务，具体保修期限和政策请以实际购买页面和发票信息为准；
+          - 使用与注意事项：如遇质量问题，可在规定时间内申请售后服务；
+          - 活动与优惠：如有满减或优惠活动，以当前下单页展示为准。
+
+          如果您还有更具体的问题（例如某个功能是否支持），可以继续详细描述；如果已经决定购买，可以直接说“买这款”或“下单”。 
+    transitions:
       - target: "state_end_inquiry"
 
   - id: "state_confirm_purchase"
     actions:
+      - type: api_call
+        endpoint: "database://orders/create"
+        params:
+          product_id: "{{session.current_product.product_id}}"
+          quantity: 1
+          shipping_address: "{{session.shipping_address}}"
+        save_to: "session.new_order"
       - type: respond
         text: |
-          好的！您想购买【{{session.current_product.name}}】
-          单价：¥{{session.current_product.price}}
+          好的，已为您生成订单编号：{{session.new_order.order_id}}
+          商品：{{session.new_order.product_name}}
+          订单总价：¥{{session.new_order.total_price}}
 
-          由于这是演示系统，实际购买流程需要跳转到订单系统。
-          您可以说“查看我的订单”来查看已有订单状态。
-
-          还有其他需要了解的吗？
+          请注意：这是模拟订单，物流后续将在订单管理流程中查询。
     transitions:
       - target: "state_end_inquiry"
 

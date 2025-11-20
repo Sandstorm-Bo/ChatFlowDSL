@@ -6,6 +6,12 @@ states:
     triggers:
       - type: regex
         value: ".*(退款|退货).*"
+      - type: regex
+        value: ".*(退钱|退费|退回|退一退|要退款|要退货).*"
+      - type: regex
+        value: ".*(售后|售后服务|申请售后|质量问题|有问题|坏了).*"
+      - type: regex
+        value: ".*(refund|return).*"
     actions:
       - type: respond
         text: "您好，请问您是想申请退款吗？请您简单描述一下退款原因，比如“商品有损坏”或“七天无理由”。"
@@ -79,14 +85,36 @@ states:
         regex: "(?P<order_id>[A-Z0-9]{10,})"
         target: "session.order_id"
       - type: api_call
-        method: POST
-        url: "https://api.my-shop.com/refund/check"
-        payload:
-            order_id: "{{session.order_id}}"
-            reason: "{{session.refund_reason_type}}"
+        endpoint: "database://refunds/check"
+        params:
+          order_id: "{{session.order_id}}"
+          reason_type: "{{session.refund_reason_type}}"
         save_to: "session.refund_check_result"
       - type: respond
         text: "您的订单 {{session.order_id}} 状态已收到。{{session.refund_check_result.message}}"
+    transitions:
+      - condition:
+          all:
+            - type: variable_equals
+              variable: "session.refund_check_result.eligible"
+              value: true
+        target: "state_submit_refund_application"
+      - target: "state_end_refund"
+
+  - id: "state_submit_refund_application"
+    actions:
+      - type: api_call
+        endpoint: "database://refunds/create"
+        params:
+          order_id: "{{session.order_id}}"
+          reason: "{{session.refund_reason_type}}"
+          amount: "{{session.refund_check_result.amount}}"
+          user_id: "{{session.user_id}}"
+        save_to: "session.refund_result"
+      - type: respond
+        text: |
+          退款申请已提交，结果：{{session.refund_result.message if session.refund_result.message else '正在处理中'}}
+          退款金额：¥{{session.refund_result.amount}}
     transitions:
       - target: "state_end_refund"
       

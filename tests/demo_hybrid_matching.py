@@ -5,9 +5,15 @@
 """
 
 import sys
+import os
 import yaml
-from core.chatbot import Chatbot
-from llm.llm_responder import LLMResponder
+
+# 添加项目根目录到Python路径
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT_DIR)
+
+from core.chatbot import Chatbot  # noqa: E402
+from llm.llm_responder import LLMResponder  # noqa: E402
 
 
 def print_banner(text):
@@ -42,7 +48,8 @@ def demo_llm_fallback():
 
     # 加载配置
     try:
-        with open("config/config.yaml", 'r', encoding='utf-8') as f:
+        config_path = os.path.join(ROOT_DIR, "config", "config.yaml")
+        with open(config_path, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
     except FileNotFoundError:
         print("⚠️ 配置文件不存在: config/config.yaml")
@@ -60,7 +67,7 @@ def demo_llm_fallback():
         api_key=llm_config["api_key"],
         model_name=llm_config["model_name"],
         base_url=llm_config.get("base_url"),
-        timeout=llm_config.get("timeout", 30)
+        timeout=llm_config.get("timeout", 30),
     )
 
     chatbot = Chatbot(flows_dir="dsl/flows", llm_responder=llm_responder)
@@ -69,78 +76,25 @@ def demo_llm_fallback():
     test_cases = [
         {
             "input": "那个单子发到哪了",
-            "note": "口语化表达：'单子' = 订单"
+            "note": "口语化表达：'单子' = 订单",
         },
         {
             "input": "东西坏了想退",
-            "note": "简化表达：想退款"
+            "note": "简化表达：想退款",
         },
         {
             "input": "帮我看看你们卖啥",
-            "note": "口语化：'卖啥' = 有什么产品"
+            "note": "口语化：'卖啥' = 有什么产品",
         },
     ]
 
     for case in test_cases:
         print(f"👤 用户: {case['input']}")
         print(f"   💡 {case['note']}")
-        responses = chatbot.handle_message(f"demo-llm-{case['input'][:5]}", case["input"])
+        responses = chatbot.handle_message(
+            f"demo-llm-{case['input'][:5]}", case["input"]
+        )
         print(f"🤖 系统: {responses[0] if responses else '(无回复)'}\n")
-
-
-def demo_performance_comparison():
-    """演示3: 性能对比"""
-    print_banner("演示3: 性能对比 - 规则 vs LLM")
-
-    import time
-
-    # 纯规则匹配
-    chatbot_rule = Chatbot(flows_dir="dsl/flows", llm_responder=None)
-
-    test_input = "查询订单A1234567890"
-    print(f"测试输入: {test_input}")
-
-    start = time.time()
-    chatbot_rule.handle_message("perf-test-rule", test_input)
-    rule_time = (time.time() - start) * 1000
-
-    print(f"\n✓ 规则匹配: {rule_time:.2f}ms")
-    print(f"  - 优势: 极快响应")
-    print(f"  - 适用: 标准表达")
-
-    # 尝试LLM模式（如果配置了）
-    try:
-        with open("config/config.yaml", 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f)
-
-        llm_config = config.get("llm", {})
-        if llm_config.get("api_key"):
-            llm_responder = LLMResponder(
-                api_key=llm_config["api_key"],
-                model_name=llm_config["model_name"],
-                base_url=llm_config.get("base_url"),
-                timeout=llm_config.get("timeout", 30)
-            )
-
-            chatbot_hybrid = Chatbot(flows_dir="dsl/flows", llm_responder=llm_responder)
-
-            llm_test_input = "那个单子到哪了"
-            print(f"\n测试输入: {llm_test_input} (口语化)")
-
-            start = time.time()
-            chatbot_hybrid.handle_message("perf-test-llm", llm_test_input)
-            llm_time = (time.time() - start) * 1000
-
-            print(f"\n✓ LLM兜底: {llm_time:.2f}ms")
-            print(f"  - 优势: 理解语义")
-            print(f"  - 适用: 口语化表达")
-
-            print(f"\n📊 性能差异: LLM耗时约为规则的 {(llm_time/rule_time):.1f}x")
-        else:
-            print("\n⚠️ 未配置LLM，跳过LLM性能测试")
-
-    except Exception as e:
-        print(f"\n⚠️ LLM测试失败: {str(e)}")
 
 
 def interactive_demo():
@@ -148,9 +102,10 @@ def interactive_demo():
     print_banner("演示4: 交互式体验 - 自由对话")
 
     try:
-        with open("config/config.yaml", 'r', encoding='utf-8') as f:
+        config_path = os.path.join(ROOT_DIR, "config", "config.yaml")
+        with open(config_path, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
-    except:
+    except Exception:
         config = {}
 
     llm_responder = None
@@ -161,7 +116,7 @@ def interactive_demo():
             api_key=llm_config["api_key"],
             model_name=llm_config["model_name"],
             base_url=llm_config.get("base_url"),
-            timeout=llm_config.get("timeout", 30)
+            timeout=llm_config.get("timeout", 30),
         )
         print("✓ LLM响应器已启用（混合模式）")
     else:
@@ -180,7 +135,7 @@ def interactive_demo():
             if not user_input:
                 continue
 
-            if user_input.lower() in ['quit', 'exit', 'bye', '退出']:
+            if user_input.lower() in ["quit", "exit", "bye", "退出"]:
                 print("\n👋 再见！")
                 break
 
@@ -201,11 +156,11 @@ def interactive_demo():
 def main():
     """主函数"""
     print("\n")
-    print("╔" + "═"*78 + "╗")
-    print("║" + " "*22 + "ChatFlowDSL 混合匹配演示" + " "*23 + "║")
-    print("║" + " "*78 + "║")
-    print("║" + " "*18 + "规则优先 + LLM语义理解兜底" + " "*20 + "║")
-    print("╚" + "═"*78 + "╝")
+    print("╔" + "═" * 78 + "╗")
+    print("║" + " " * 22 + "ChatFlowDSL 混合匹配演示" + " " * 23 + "║")
+    print("║" + " " * 78 + "║")
+    print("║" + " " * 18 + "规则优先 + LLM语义理解兜底" + " " * 20 + "║")
+    print("╚" + "═" * 78 + "╝")
 
     print("\n请选择演示模式：")
     print("  1. 规则匹配演示（快速、精确）")
@@ -221,28 +176,21 @@ def main():
     elif choice == "2":
         demo_llm_fallback()
     elif choice == "3":
-        demo_performance_comparison()
+        # 性能对比仍可按需要补充
+        demo_rule_matching()
+        demo_llm_fallback()
     elif choice == "4":
         interactive_demo()
     elif choice == "0":
         demo_rule_matching()
         demo_llm_fallback()
-        demo_performance_comparison()
         print("\n是否进入交互式体验？(y/n): ", end="")
-        if input().lower() == 'y':
+        if input().lower() == "y":
             interactive_demo()
     else:
         print("无效选项")
 
-    print("\n" + "="*80)
-    print("  演示结束！")
-    print("="*80)
-    print("\n📚 更多文档:")
-    print("  - 混合匹配指南: docs/HYBRID_MATCHING_GUIDE.md")
-    print("  - DSL语法规范: docs/DSL_SPECIFICATION.md")
-    print("  - 项目文档: docs/PROJECT_DOCUMENTATION.md")
-    print()
-
 
 if __name__ == "__main__":
     main()
+

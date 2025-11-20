@@ -6,6 +6,8 @@ states:
     triggers:
       - type: regex
         value: ".*(你好|您好|hi|hello).*"
+      - type: regex
+        value: ".*(嗨|哈喽|早上好|晚上好|中午好|在吗|有人吗).*"
     actions:
       - type: respond
         text: "您好！有什么可以为您效劳的吗？我可以帮您：\n- 查询商品信息\n- 查看订单状态\n- 处理退款退货\n- 申请发票\n- 解决设备故障"
@@ -14,7 +16,5 @@ states:
       - target: "state_end_chitchat"
 
   - id: "state_end_chitchat"
-    actions:
-      - type: respond
-        text: "好的，请问您具体需要什么帮助？"
+    actions: []
 

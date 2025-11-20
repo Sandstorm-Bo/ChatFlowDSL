@@ -41,8 +41,13 @@ class ChatClient:
         self.user_id = None
         self.username = None
 
-    def connect(self):
-        """连接到服务器"""
+    def connect(self, auto_auth: bool = True):
+        """连接到服务器
+
+        Args:
+            auto_auth: 是否在收到服务器欢迎消息后自动进入命令行登录/注册流程。
+                       GUI 客户端可以将其设置为 False，自行处理登录界面。
+        """
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect((self.host, self.port))
@@ -57,8 +62,8 @@ class ChatClient:
                 self.session_id = welcome_msg.get('session_id')
 
                 # 检查是否需要登录
-                if welcome_msg.get('require_auth', False):
-                    # 执行登录或注册流程
+                if welcome_msg.get('require_auth', False) and auto_auth:
+                    # 执行登录或注册流程（命令行）
                     if not self.login_or_register():
                         print(f"[{self.client_name}] 认证失败，断开连接")
                         self.disconnect()

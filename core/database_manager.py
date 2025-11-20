@@ -174,59 +174,138 @@ class DatabaseManager:
             "address": "广州市天河区xx大道xx号"
         })
 
-        # 添加测试商品
-        products = [
+        # 添加测试商品 - 生成至少50款不同商品
+        base_catalog = [
             {
-                "product_id": "P001",
-                "name": "无线蓝牙耳机Pro",
+                "name_prefix": "无线蓝牙耳机",
                 "category": "数码配件",
-                "price": 299.00,
-                "stock": 150,
-                "description": "高品质无线蓝牙耳机，支持主动降噪",
-                "features": json.dumps(["主动降噪", "30小时续航", "快速充电", "IPX4防水"], ensure_ascii=False),
-                "image_url": "https://example.com/images/headset_pro.jpg"
+                "base_price": 269.0,
+                "description": "高品质无线蓝牙耳机，兼顾通勤与运动场景。",
+                "features": ["主动降噪", "30小时续航", "Type-C快充", "佩戴舒适贴合"],
+                "image_prefix": "headset"
             },
             {
-                "product_id": "P002",
-                "name": "智能手环Max",
+                "name_prefix": "智能手环",
                 "category": "智能穿戴",
-                "price": 199.00,
-                "stock": 200,
-                "description": "多功能智能手环，健康监测专家",
-                "features": json.dumps(["心率监测", "睡眠分析", "运动追踪", "50米防水"], ensure_ascii=False),
-                "image_url": "https://example.com/images/band_max.jpg"
+                "base_price": 199.0,
+                "description": "轻巧的健康管家，支持全天候健康监测。",
+                "features": ["心率监测", "血氧跟踪", "50米防水", "消息提醒"],
+                "image_prefix": "band"
             },
             {
-                "product_id": "P003",
-                "name": "便携充电宝20000mAh",
+                "name_prefix": "便携充电宝",
                 "category": "数码配件",
-                "price": 149.00,
-                "stock": 300,
-                "description": "大容量快充移动电源",
-                "features": json.dumps(["20000mAh大容量", "双向快充", "多设备同充", "LED电量显示"], ensure_ascii=False),
-                "image_url": "https://example.com/images/powerbank.jpg"
+                "base_price": 149.0,
+                "description": "大容量双向快充移动电源，随时补能。",
+                "features": ["20000mAh", "双向快充", "多设备同充", "LED电量显示"],
+                "image_prefix": "powerbank"
             },
             {
-                "product_id": "P004",
-                "name": "机械键盘RGB版",
+                "name_prefix": "机械键盘",
                 "category": "电脑外设",
-                "price": 399.00,
-                "stock": 80,
-                "description": "专业机械键盘，游戏办公两相宜",
-                "features": json.dumps(["青轴手感", "RGB背光", "全键无冲", "铝合金面板"], ensure_ascii=False),
-                "image_url": "https://example.com/images/keyboard.jpg"
+                "base_price": 399.0,
+                "description": "专业机械键盘，游戏与办公手感兼备。",
+                "features": ["热插拔轴体", "RGB背光", "宏按键", "全键无冲"],
+                "image_prefix": "keyboard"
             },
             {
-                "product_id": "P005",
-                "name": "4K网络摄像头",
+                "name_prefix": "4K网络摄像头",
                 "category": "电脑外设",
-                "price": 599.00,
-                "stock": 50,
-                "description": "高清视频会议摄像头",
-                "features": json.dumps(["4K超清", "自动对焦", "降噪麦克风", "广角镜头"], ensure_ascii=False),
-                "image_url": "https://example.com/images/webcam.jpg"
+                "base_price": 569.0,
+                "description": "馈送清晰画质的视频会议摄像头。",
+                "features": ["4K超清", "自动对焦", "降噪麦克风", "广角镜头"],
+                "image_prefix": "webcam"
+            },
+            {
+                "name_prefix": "运动蓝牙耳机",
+                "category": "智能穿戴",
+                "base_price": 259.0,
+                "description": "专为运动设计的稳固挂耳式蓝牙耳机。",
+                "features": ["防汗防水", "低延迟", "稳固挂耳设计", "语音助手"],
+                "image_prefix": "sport_earbud"
+            },
+            {
+                "name_prefix": "专业游戏鼠标",
+                "category": "电脑外设",
+                "base_price": 269.0,
+                "description": "高精度电竞鼠标，适合 FPS/MOBA 用户。",
+                "features": ["16000DPI", "可编程按键", "RGB灯效", "宏功能"],
+                "image_prefix": "mouse"
+            },
+            {
+                "name_prefix": "电竞显示器",
+                "category": "电脑外设",
+                "base_price": 1299.0,
+                "description": "2K 高刷新率电竞显示器，游戏画面流畅。",
+                "features": ["165Hz高刷", "1ms响应", "HDR支持", "低蓝光护眼"],
+                "image_prefix": "monitor"
+            },
+            {
+                "name_prefix": "USB-C多功能扩展坞",
+                "category": "数码配件",
+                "base_price": 329.0,
+                "description": "一线连接笔记本，扩展多种实用接口。",
+                "features": ["HDMI 4K输出", "千兆网口", "USB 3.0 x3", "PD快充"],
+                "image_prefix": "hub"
+            },
+            {
+                "name_prefix": "智能音箱",
+                "category": "智能家居",
+                "base_price": 199.0,
+                "description": "支持语音助手和智能家居联动的小型音箱。",
+                "features": ["远场拾音", "语音唤醒", "云端音乐库", "IoT控制"],
+                "image_prefix": "speaker"
+            },
+            {
+                "name_prefix": "高性能轻薄本",
+                "category": "电脑整机",
+                "base_price": 5899.0,
+                "description": "全金属轻薄本，移动办公与创作兼顾。",
+                "features": ["12代酷睿", "16GB内存", "512GB SSD", "全功能接口"],
+                "image_prefix": "laptop"
+            },
+            {
+                "name_prefix": "平板电脑",
+                "category": "平板电脑",
+                "base_price": 2399.0,
+                "description": "支持手写笔与键盘扩展的多任务平板。",
+                "features": ["2K全面屏", "四扬声器", "手写笔支持", "分屏多任务"],
+                "image_prefix": "tablet"
+            },
+            {
+                "name_prefix": "智能家居中枢",
+                "category": "智能家居",
+                "base_price": 799.0,
+                "description": "统一管理家中智能设备的控制中枢。",
+                "features": ["Zigbee网关", "自动化流程", "摄像头接入", "安全检测"],
+                "image_prefix": "homehub"
+            },
+            {
+                "name_prefix": "扫地机器人",
+                "category": "智能家居",
+                "base_price": 1599.0,
+                "description": "自动规划路径的扫拖一体机器人。",
+                "features": ["激光导航", "扫拖一体", "自动回充", "语音控制"],
+                "image_prefix": "robotvac"
             }
         ]
+
+        products = []
+        for idx in range(1, 51):
+            template = base_catalog[(idx - 1) % len(base_catalog)]
+            price = template["base_price"] + (idx % 5) * 10
+            stock = 80 + (idx * 7) % 220
+            product = {
+                "product_id": f"P{idx:03d}",
+                "name": f"{template['name_prefix']} {idx}",
+                "category": template["category"],
+                "price": round(price, 2),
+                "stock": stock,
+                "description": template["description"],
+                "features": json.dumps(template["features"], ensure_ascii=False),
+                "image_url": f"https://example.com/images/{template['image_prefix']}_{idx}.jpg"
+            }
+            products.append(product)
 
         for product in products:
             self.add_product(product)
@@ -547,6 +626,27 @@ class DatabaseManager:
             print(f"[创建订单失败] {str(e)}")
             return False
 
+    def decrease_product_stock(self, product_id: str, amount: int = 1) -> bool:
+        """减少指定商品库存"""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE products
+                SET stock = stock - ?
+                WHERE product_id = ? AND stock >= ?
+                """,
+                (amount, product_id, amount),
+            )
+            affected = cursor.rowcount
+            conn.commit()
+            conn.close()
+            return affected > 0
+        except Exception as e:
+            print(f"[更新库存失败] {str(e)}")
+            return False
+
     def get_order(self, order_id: str) -> Optional[Dict[str, Any]]:
         """获取订单详情"""
         conn = self._get_connection()
@@ -655,16 +755,71 @@ class DatabaseManager:
             return False
 
     def get_refund_by_order(self, order_id: str) -> Optional[Dict[str, Any]]:
-        """根据订单号查询退款"""
+        """根据订单号查询最新一条退款记录"""
         conn = self._get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM refunds WHERE order_id = ? ORDER BY created_at DESC LIMIT 1", (order_id,))
+        cursor.execute(
+            "SELECT * FROM refunds WHERE order_id = ? ORDER BY created_at DESC LIMIT 1",
+            (order_id,),
+        )
         row = cursor.fetchone()
         conn.close()
 
         if row:
             return dict(row)
         return None
+
+    def check_refund_eligibility(
+        self, order_id: str, reason_type: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        检查订单是否符合退款申请条件
+
+        返回字典示例:
+        {
+            "eligible": True/False,
+            "amount": 299.0,          # 可退金额（如适用）
+            "order": {...},           # 订单信息（如存在）
+            "reason": "订单不存在",     # 机器可读原因
+            "message": "抱歉，订单不存在，无法申请退款"  # 用户可读提示
+        }
+        """
+        order = self.get_order(order_id)
+        if not order:
+            return {
+                "eligible": False,
+                "reason": "订单不存在",
+                "message": "抱歉，没有找到该订单，无法为您办理退款。",
+            }
+
+        # 示例规则：只有已付款及之后状态可以申请退款
+        if order["status"] not in ["paid", "shipped", "delivered"]:
+            return {
+                "eligible": False,
+                "order": order,
+                "reason": "订单未支付或已取消",
+                "message": "当前订单未支付或已取消，无法发起退款申请。",
+            }
+
+        # 如果已存在退款记录且状态为进行中/完成，则不允许重复申请
+        existing = self.get_refund_by_order(order_id)
+        if existing and existing.get("status") in ["pending", "approved", "completed"]:
+            return {
+                "eligible": False,
+                "order": order,
+                "reason": "已有退款记录",
+                "message": "该订单已存在退款记录，请勿重复申请。",
+            }
+
+        # 默认可退金额为订单总价（更复杂的规则可根据reason_type扩展）
+        amount = order.get("total_price", 0.0)
+        return {
+            "eligible": True,
+            "order": order,
+            "amount": amount,
+            "reason": "符合退款条件",
+            "message": "该订单符合退款条件，我可以为您提交退款申请。",
+        }
 
     # ==================== 发票相关操作 ====================
 
@@ -697,11 +852,19 @@ class DatabaseManager:
         """检查订单是否可以开发票"""
         order = self.get_order(order_id)
         if not order:
-            return {"eligible": False, "reason": "订单不存在"}
+            return {
+                "eligible": False,
+                "reason": "订单不存在",
+                "message": "抱歉，没有找到该订单，无法开具发票。",
+            }
 
         # 检查订单状态
         if order["status"] not in ["paid", "shipped", "delivered"]:
-            return {"eligible": False, "reason": "订单未支付或已取消"}
+            return {
+                "eligible": False,
+                "reason": "订单未支付或已取消",
+                "message": "订单未支付或已取消，暂时无法开具发票。",
+            }
 
         # 检查是否已开过发票
         conn = self._get_connection()
@@ -711,9 +874,17 @@ class DatabaseManager:
         conn.close()
 
         if existing_invoice:
-            return {"eligible": False, "reason": "该订单已开具发票"}
+            return {
+                "eligible": False,
+                "reason": "该订单已开具发票",
+                "message": "该订单已开具发票，如需修改请联系人工客服。",
+            }
 
-        return {"eligible": True, "order": order}
+        return {
+            "eligible": True,
+            "order": order,
+            "message": "该订单符合开票条件，我可以为您提交发票申请。",
+        }
 
 
 if __name__ == "__main__":

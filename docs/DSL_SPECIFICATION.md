@@ -109,7 +109,8 @@ ChatFlow DSL（Domain-Specific Language）是一种声明式脚本语言，用�
                               "save_to:" <variable>
 
 <set_variable_action> ::= "- type: set_variable"
-                          "variable:" <variable>
+                          "scope:" "session"
+                          "key:" <identifier>
                           "value:" <value>
 
 <wait_for_input_action> ::= "- type: wait_for_input"
@@ -137,7 +138,7 @@ ChatFlow DSL（Domain-Specific Language）是一种声明式脚本语言，用�
                  "value:" <regex_pattern>
 
 <variable_equals_rule> ::= "- type: variable_equals"
-                           "variable:" <variable>
+                           "variable:" <identifier>  # 对应 session.variables 中的键名
                            "value:" <value>
 
 <variable_exists_rule> ::= "- type: variable_exists"
@@ -269,7 +270,8 @@ triggers:
 
 ```yaml
 - type: set_variable
-  variable: "session.current_category"
+  scope: session
+  key: "current_category"
   value: "数码配件"
 ```
 
@@ -415,13 +417,15 @@ params:
 **功能**: 设置会话变量值
 
 **参数**:
-- `variable` (string, 必需): 变量路径
+- `scope` (string, 必需): 作用域，目前固定为 `"session"`
+- `key` (string, 必需): 会话变量名，对应 `session.variables[key]`
 - `value` (any, 必需): 变量值
 
 **示例**:
 ```yaml
 - type: set_variable
-  variable: "session.refund_reason"
+  scope: session
+  key: "refund_reason"
   value: "quality_issue"
 ```
 
@@ -450,7 +454,7 @@ condition:
     - type: regex
       value: ".*确认.*"
     - type: variable_exists
-      variable: "session.order_id"
+      variable: "order_id"
 ```
 
 #### 6.1.2 any - 任一条件满足即可（OR逻辑）
@@ -481,9 +485,12 @@ condition:
 
 ```yaml
 - type: variable_equals
-  variable: "session.refund_reason"
+  variable: "refund_reason"
   value: "quality_issue"
 ```
+
+> 注意：这里的 `variable` 是存放在 `session.variables` 字典中的键名，例如 `refund_reason`、`order_id` 等。
+> 在模板或 `save_to` 中则使用 `session.refund_reason`、`session.order_id` 这样的完整路径。
 
 #### 6.2.3 variable_exists - 变量存在性检查
 
@@ -491,7 +498,7 @@ condition:
 
 ```yaml
 - type: variable_exists
-  variable: "session.order_id"
+  variable: "order_id"
 ```
 
 ### 6.3 复杂条件示例
@@ -500,7 +507,7 @@ condition:
 condition:
   all:
     - type: variable_exists
-      variable: "session.order_id"
+      variable: "order_id"
     - type: any
         - type: regex
           value: ".*确认.*|.*是的.*"

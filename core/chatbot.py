@@ -9,17 +9,11 @@ from core.action_executor import ActionExecutor
 from core.session_manager import SessionManager, Session
 
 class Chatbot:
-    """
-    The main orchestrator for the chatbot. It loads all flows, manages sessions,
-    and routes user input to the appropriate interpreter.
-
-    支持混合模式：规则优先 + LLM语义理解兜底
-    """
+    """聊天机器人编排器，支持混合模式：规则优先 + LLM语义理解兜底"""
     def __init__(self, flows_dir: str = "dsl/flows", llm_responder=None):
         self.flows: Dict[str, ChatFlow] = self._load_flows(flows_dir)
-        self.llm_responder = llm_responder  # 可选的LLM响应器
+        self.llm_responder = llm_responder
 
-        # 创建解释器时传入LLM响应器
         self.interpreters: Dict[str, Interpreter] = {
             name: Interpreter(flow, llm_responder=llm_responder)
             for name, flow in self.flows.items()
@@ -27,7 +21,6 @@ class Chatbot:
         self.session_manager = SessionManager()
         self.action_executor = ActionExecutor()
 
-        # 构建流程意图映射（用于LLM匹配）
         self.flow_intents = self._build_flow_intent_map()
 
         print(f"Chatbot initialized with {len(self.flows)} flows.")
@@ -37,12 +30,7 @@ class Chatbot:
             print(f"  [INFO] 仅使用规则匹配（无LLM）")
 
     def _build_flow_intent_map(self) -> Dict[str, str]:
-        """
-        构建流程到意图的映射，用于LLM匹配
-
-        Returns:
-            {flow_name: intent_description}
-        """
+        """构建流程到意图的映射，用于LLM匹配"""
         default_intents = {
             "售前产品咨询流程": "用户想了解产品信息、查看商品详情、询问价格和功能",
             "售中订单管理流程": "用户想查询订单状态、查看物流信息、取消订单",
@@ -64,7 +52,7 @@ class Chatbot:
         return intent_map
 
     def _load_flows(self, flows_dir: str) -> Dict[str, ChatFlow]:
-        """Loads all DSL flow files from a directory."""
+        """从目录加载所有DSL流程文件"""
         flows = {}
         if not os.path.exists(flows_dir):
             print(f"Warning: Flows directory not found at '{flows_dir}'")
@@ -82,15 +70,7 @@ class Chatbot:
         return flows
 
     def _try_rule_based_trigger(self, user_input: str) -> Optional[str]:
-        """
-        尝试使用规则匹配触发流程（优先级最高）
-
-        Args:
-            user_input: 用户输入
-
-        Returns:
-            匹配的流程名称，如果未匹配则返回None
-        """
+        """尝试使用规则匹配触发流程（优先级最高）"""
         print(f"[步骤1: 规则匹配] 检查用户输入: '{user_input}'")
 
         for flow_name, flow in self.flows.items():
@@ -107,15 +87,7 @@ class Chatbot:
         return None
 
     def _try_llm_based_trigger(self, user_input: str, session: Optional[Session]) -> Optional[str]:
-        """
-        使用LLM进行意图识别，触发流程（兜底方案）
-
-        Args:
-            user_input: 用户输入
-
-        Returns:
-            匹配的流程名称，如果未匹配则返回None
-        """
+        """使用LLM进行意图识别，触发流程（兜底方案）"""
         if not self.llm_responder:
             print(f"  [SKIP] [LLM匹配跳过] LLM响应器未配置")
             return None
@@ -196,12 +168,7 @@ class Chatbot:
             return None
 
     def _detect_intent_flow(self, user_input: str, session: Optional[Session]) -> Tuple[Optional[str], Optional[str]]:
-        """
-        综合使用规则和 LLM 识别用户意图所属流程。
-
-        Returns:
-            (flow_name, source) 其中 source ∈ {"rule", "llm", None}
-        """
+        """综合使用规则和LLM识别用户意图所属流程，返回(flow_name, source)"""
         rule_flow = self._try_rule_based_trigger(user_input)
         llm_flow = self._try_llm_based_trigger(user_input, session)
 
@@ -216,11 +183,7 @@ class Chatbot:
         return None, None
 
     def _generate_fallback_response(self, user_input: str) -> str:
-        """
-        生成友好的兜底回复（当无法匹配任何流程时使用）
-
-        优先使用LLM生成自然回复，失败时降级到固定模板
-        """
+        """生成兜底回复，优先使用LLM，失败时使用固定模板"""
         if self.llm_responder:
             try:
                 print(f"[兜底回复] 使用LLM生成友好回复...")
@@ -245,22 +208,8 @@ class Chatbot:
 
     def handle_message(self, session_id: str, user_input: str, user_id: Optional[str] = None) -> List[str]:
         """
-        Handles a user's message, routes it to the correct flow, and returns the bot's responses.
-
-        Args:
-            session_id: 会话ID
-            user_input: 用户输入
-            user_id: 用户ID（可选，用于识别用户并进行个性化查询）
-
-        处理流程（全局流程切换机制）：
-        1. 无论是否在某个流程中，都尝试匹配新流程（规则优先 + LLM兜底）
-        2. 如果匹配到新流程：
-           a) 如果与当前流程不同，立即切换到新流程
-           b) 如果与当前流程相同，继续执行当前流程
-        3. 如果未匹配到新流程但有活跃流程，继续执行当前流程
-        4. 如果既没有匹配也没有活跃流程，返回默认提示
-
-        这种设计允许用户随时通过关键词切换到其他业务流程，解决了"通用闲聊流程死锁"问题。
+        处理用户消息，路由到正确的流程并返回回复
+        支持全局流程切换：规则优先 + LLM兜底，允许用户随时切换业务流程
         """
         session = self.session_manager.get_session(session_id, user_id)
 
@@ -346,9 +295,7 @@ class Chatbot:
         return responses
 
     def _activate_flow(self, session: Session, flow_name: str) -> Tuple[List[Dict], Interpreter]:
-        """
-        激活指定流程并返回入口动作和对应解释器，便于后续继续处理。
-        """
+        """激活指定流程并返回入口动作和解释器"""
         session.set("active_flow_name", flow_name)
         interpreter = self.interpreters[flow_name]
         flow = self.flows[flow_name]

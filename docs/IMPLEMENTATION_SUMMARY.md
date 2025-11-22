@@ -261,7 +261,7 @@ conversation = [
 
 ---
 
-### 6. **演示脚本** (`demo_hybrid_matching.py`)
+### 6. **演示脚本** (`tests/demo_hybrid_matching.py`)
 
 创建了交互式演示程序，包含4个演示模式:
 
@@ -430,7 +430,7 @@ states:
 ### 新增的文件:
 1. `tests/test_colloquial_expressions.py` - 口语化表达测试
 2. `docs/HYBRID_MATCHING_GUIDE.md` - 混合匹配使用指南
-3. `demo_hybrid_matching.py` - 交互式演示脚本
+3. `tests/demo_hybrid_matching.py` - 交互式演示脚本
 4. `docs/IMPLEMENTATION_SUMMARY.md` - 本文档
 
 ---

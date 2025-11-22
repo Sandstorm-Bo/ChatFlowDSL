@@ -25,6 +25,12 @@ class MockLLMResponder:
 
     使用简单的规则匹配代替真实的LLM API调用
     适用于单元测试和集成测试
+
+    对齐真实 LLMResponder 的部分接口：
+    - recognize_intent
+    - check_semantic_match
+    - match_condition_with_llm
+    - generate_response
     """
 
     def __init__(self):
@@ -48,9 +54,11 @@ class MockLLMResponder:
             "税号": r"\d{15,20}",
         }
 
+    # -------- 基础 Mock 能力 --------
+
     def recognize_intent(self, text: str, context: Optional[Dict] = None) -> str:
         """
-        识别用户意图（Mock版本）
+        识别用户意图（简单关键词匹配版本）
 
         Args:
             text: 用户输入
@@ -100,26 +108,92 @@ class MockLLMResponder:
         Returns:
             Mock回复
         """
-        # 简单的模板回复
         if "产品" in prompt or "商品" in prompt:
             return "我们有多款优质商品，包括耳机、手环、充电宝等，请问您对哪类商品感兴趣？"
-        elif "订单" in prompt:
+        if "订单" in prompt:
             return "请提供您的订单号，我帮您查询订单详情。"
-        elif "退款" in prompt:
+        if "退款" in prompt:
             return "我理解您想要退款，请告诉我订单号和退款原因。"
-        else:
-            return "您好！有什么可以帮您的吗？"
+        return "您好！有什么可以帮您的吗？"
+
+    # -------- 对齐 LLMResponder 的高级接口 --------
+
+    def check_semantic_match(
+        self,
+        user_input: str,
+        semantic_meaning: str,
+        session_context: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        语义匹配 Mock：用简单关键词近似实现
+
+        返回结构与真实 LLMResponder 保持一致：
+        {
+            "matched": bool,
+            "confidence": 0.0-1.0,
+            "reasoning": "字符串"
+        }
+        """
+        text = user_input.lower()
+        meaning = semantic_meaning.lower()
+
+        # 非严格：只要语义描述中的关键词出现在输入里，就认为匹配
+        # 例如 semantic_meaning = "商品质量不满意"
+        keywords = re.findall(r"[\u4e00-\u9fa5a-zA-Z0-9]+", meaning)
+        hit = any(k and k in text for k in keywords)
+
+        return {
+            "matched": hit,
+            "confidence": 0.9 if hit else 0.1,
+            "reasoning": f"Mock 匹配：{'命中' if hit else '未命中'} 关键词 {keywords}",
+        }
+
+    def match_condition_with_llm(
+        self,
+        user_input: str,
+        condition_description: str,
+        available_targets: List[str],
+        session_context: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        多路条件匹配 Mock：
+        简单地在 user_input 中搜索 target 文本，命中的优先，未命中则返回第一个。
+
+        返回结构：
+        {
+            "target": "目标名称",
+            "confidence": 0.0-1.0,
+            "reasoning": "字符串"
+        }
+        """
+        text = user_input.lower()
+
+        for target in available_targets:
+            if target and str(target).lower() in text:
+                return {
+                    "target": target,
+                    "confidence": 0.9,
+                    "reasoning": f"Mock 匹配：在输入中找到了 '{target}'",
+                }
+
+        # 默认兜底：选择第一个目标
+        fallback = available_targets[0] if available_targets else ""
+        return {
+            "target": fallback,
+            "confidence": 0.5,
+            "reasoning": "Mock 匹配：未命中任何目标，返回第一个作为兜底",
+        }
 
 
 class MockDatabaseManager:
     """
     Mock数据库管理器
 
-    使用内存SQLite数据库，提供与真实数据库相同的接口
+    使用内存SQLite数据库，提供与真实数据库相同的主要接口
     适用于快速测试，无需持久化
     """
 
-    def __init__(self, use_memory=True):
+    def __init__(self, use_memory: bool = True):
         """
         初始化Mock数据库
 
@@ -127,7 +201,7 @@ class MockDatabaseManager:
             use_memory: 是否使用内存数据库（默认True）
         """
         self.db_path = ":memory:" if use_memory else "test_chatbot.db"
-        self.conn = None
+        self.conn: Optional[sqlite3.Connection] = None
         self._init_database()
         self._init_test_data()
 
@@ -143,7 +217,7 @@ class MockDatabaseManager:
         conn = self._get_connection()
         cursor = conn.cursor()
 
-        # 商品表
+        # 商品表（精简版）
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS products (
                 product_id TEXT PRIMARY KEY,
@@ -155,7 +229,7 @@ class MockDatabaseManager:
             )
         """)
 
-        # 订单表
+        # 订单表（精简版）
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS orders (
                 order_id TEXT PRIMARY KEY,
@@ -235,6 +309,63 @@ class MockDatabaseManager:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM orders WHERE user_id = ?", (user_id,))
         return [dict(row) for row in cursor.fetchall()]
+
+    # -------- 额外接口：对齐真实 DatabaseManager 的常用方法 --------
+
+    def search_products(self, keyword: str) -> List[Dict[str, Any]]:
+        """
+        根据关键词搜索商品（名称/描述模糊匹配）
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        like = f"%{keyword}%"
+        cursor.execute(
+            "SELECT * FROM products WHERE name LIKE ? OR description LIKE ?",
+            (like, like),
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+    def add_order(self, order_data: Dict[str, Any]) -> bool:
+        """
+        创建订单（简化版）
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                INSERT INTO orders (order_id, user_id, product_id, product_name,
+                                    quantity, total_price, status, tracking_number)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    order_data.get("order_id"),
+                    order_data.get("user_id"),
+                    order_data.get("product_id"),
+                    order_data.get("product_name"),
+                    order_data.get("quantity", 1),
+                    order_data.get("total_price", 0.0),
+                    order_data.get("status", "pending"),
+                    order_data.get("tracking_number", ""),
+                ),
+            )
+            conn.commit()
+            return True
+        except Exception:
+            return False
+
+    def update_order_status(self, order_id: str, status: str) -> bool:
+        """
+        更新订单状态
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE orders SET status = ? WHERE order_id = ?",
+            (status, order_id),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
 
     def close(self):
         """关闭数据库连接"""

@@ -16,6 +16,7 @@ from dsl.dsl_parser import DslParser
 from dsl.interpreter import Interpreter
 from core.session_manager import SessionManager, Session
 from core.action_executor import ActionExecutor
+import threading
 
 
 class TestMockLLM(unittest.TestCase):
@@ -261,6 +262,26 @@ class TestSessionManager(unittest.TestCase):
         # 设置短超时时间测试过期
         self.assertTrue(session.is_expired(timeout=0.05))
 
+    def test_concurrent_get_session(self):
+        """测试多线程并发获取会话的线程安全性"""
+        num_threads = 20
+        iterations = 50
+        session_id = "concurrent-session"
+
+        def worker():
+            for _ in range(iterations):
+                session = self.manager.get_session(session_id)
+                self.assertEqual(session.session_id, session_id)
+
+        threads = [threading.Thread(target=worker) for _ in range(num_threads)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # 并发访问后，仍然只应存在一个该ID的会话
+        self.assertEqual(self.manager.get_active_session_count(), 1)
+
 
 class TestSession(unittest.TestCase):
     """测试会话对象"""
@@ -293,6 +314,57 @@ class TestSession(unittest.TestCase):
         self.assertGreater(new_time, old_time)
 
 
+class TestConcurrentMockDatabase(unittest.TestCase):
+    """测试Mock数据库在多线程下的基本行为"""
+
+    def setUp(self):
+        self.mock_db = MockDatabaseManager(use_memory=True)
+
+    def tearDown(self):
+        self.mock_db.close()
+
+    def test_concurrent_read_and_write(self):
+        """多线程同时读写订单数据"""
+        num_threads = 10
+        iterations = 20
+        user_id = "U-CONCURRENT"
+
+        def writer(idx: int):
+            for i in range(iterations):
+                order_data = {
+                    "order_id": f"C{idx:02d}{i:03d}",
+                    "user_id": user_id,
+                    "product_id": "P001",
+                    "product_name": "蓝牙耳机",
+                    "quantity": 1,
+                    "total_price": 299.0,
+                    "status": "paid",
+                    "tracking_number": "",
+                }
+                self.mock_db.add_order(order_data)
+
+        def reader():
+            for _ in range(iterations):
+                _ = self.mock_db.list_user_orders(user_id)
+
+        threads = []
+        # 一半写线程，一半读线程
+        for idx in range(num_threads):
+            if idx % 2 == 0:
+                threads.append(threading.Thread(target=writer, args=(idx,)))
+            else:
+                threads.append(threading.Thread(target=reader))
+
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        orders = self.mock_db.list_user_orders(user_id)
+        # 至少应该有若干订单被成功写入
+        self.assertGreater(len(orders), 0)
+
+
 def run_tests():
     """运行所有测试"""
     print("\n" + "=" * 80)
@@ -310,6 +382,7 @@ def run_tests():
     suite.addTests(loader.loadTestsFromTestCase(TestInterpreter))
     suite.addTests(loader.loadTestsFromTestCase(TestSessionManager))
     suite.addTests(loader.loadTestsFromTestCase(TestSession))
+    suite.addTests(loader.loadTestsFromTestCase(TestConcurrentMockDatabase))
 
     # 运行测试
     runner = unittest.TextTestRunner(verbosity=2)

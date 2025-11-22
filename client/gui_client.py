@@ -27,6 +27,12 @@ class ChatGUI:
             pass
         default_font = ("Microsoft YaHei", 10)
         style.configure(".", font=default_font)
+        # 为快捷按钮单独配置一个相对“轻量、高雅”的样式
+        style.configure(
+            "Quick.TButton",
+            font=("Microsoft YaHei", 9),
+            padding=(8, 2),
+        )
 
         # 允许窗口自适应
         self.root.rowconfigure(0, weight=1)
@@ -49,6 +55,7 @@ class ChatGUI:
 
         self.login_frame: ttk.Frame | None = None
         self.chat_frame: ttk.Frame | None = None
+        self.quick_frame: ttk.Frame | None = None
         self.register_window: tk.Toplevel | None = None
         self._register_fields: dict[str, tk.StringVar] | None = None
 
@@ -116,8 +123,9 @@ class ChatGUI:
         frame = ttk.Frame(self.root, padding=10)
         frame.grid(row=0, column=0, sticky="nsew")
 
-        frame.rowconfigure(0, weight=1)
-        frame.rowconfigure(1, weight=0)
+        frame.rowconfigure(0, weight=1)  # 聊天记录
+        frame.rowconfigure(1, weight=0)  # 快捷回复按钮
+        frame.rowconfigure(2, weight=0)  # 输入区域
         frame.columnconfigure(0, weight=1)
 
         # 聊天记录区域
@@ -134,9 +142,26 @@ class ChatGUI:
         text.grid(row=0, column=0, sticky="nsew")
         scrollbar.grid(row=0, column=1, sticky="ns")
 
+        # 快捷回复按钮区域
+        quick_frame = ttk.Frame(frame)
+        quick_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        quick_frame.columnconfigure(0, weight=1)
+        quick_frame.columnconfigure(1, weight=1)
+        quick_frame.columnconfigure(2, weight=1)
+
+        self.quick_frame = quick_frame
+        # 初始展示一个通用的快捷操作集合
+        self._render_quick_buttons(
+            [
+                ("产品咨询", "我想了解产品"),
+                ("订单查询", "我想查询订单"),
+                ("申请退款", "我想申请退款"),
+            ]
+        )
+
         # 输入区域
         input_frame = ttk.Frame(frame)
-        input_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        input_frame.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(8, 0))
         input_frame.columnconfigure(0, weight=1)
 
         entry = ttk.Entry(input_frame, textvariable=self.input_var)
@@ -437,9 +462,86 @@ class ChatGUI:
 
     def _append_bot_message(self, text: str):
         self._append_message(f"客服: {text}", "bot")
+        # 根据客服回复的内容动态调整快捷按钮
+        self._update_quick_buttons_for_bot_message(text)
 
     def _append_system_message(self, text: str):
         self._append_message(f"[系统] {text}", "system")
+
+    def _send_quick_message(self, text: str):
+        """
+        快捷回复：点击按钮后自动填充并发送预置内容
+        """
+        self.input_var.set(text)
+        self.on_send()
+
+    def _render_quick_buttons(self, buttons: list[tuple[str, str]]):
+        """
+        根据给定的 (标题, 文本) 列表重新渲染快捷按钮区域
+        """
+        if not self.quick_frame:
+            return
+
+        # 清空原有按钮
+        for child in self.quick_frame.winfo_children():
+            child.destroy()
+
+        if not buttons:
+            return
+
+        max_cols = min(4, len(buttons))
+        for col in range(max_cols):
+            self.quick_frame.columnconfigure(col, weight=1)
+
+        for idx, (label, text_value) in enumerate(buttons[:max_cols]):
+            btn = ttk.Button(
+                self.quick_frame,
+                text=label,
+                style="Quick.TButton",
+                command=lambda v=text_value: self._send_quick_message(v),
+            )
+            btn.grid(row=0, column=idx, padx=2, pady=(0, 2), sticky="ew")
+
+    def _update_quick_buttons_for_bot_message(self, text: str):
+        """
+        根据最近一条客服回复的大致含义，动态切换一组更贴近当前“状态”的快捷按钮。
+        这里不用改协议，仅通过简单的关键词判断实现。
+        """
+        if not text:
+            return
+
+        content = text.strip()
+
+        # 订单相关提示（需要用户提供订单号时）
+        if "订单号" in content or "查询订单" in content:
+            buttons = [
+                ("我不知道订单号", "我现在找不到订单号"),
+                ("最近的订单", "查一下我最近的一笔订单"),
+                ("返回产品咨询", "先帮我看看产品"),
+            ]
+        # 退款/退货场景
+        elif "退款" in content or "退货" in content:
+            buttons = [
+                ("质量问题", "因为质量问题想退款"),
+                ("七天无理由", "七天无理由退货"),
+                ("先不退了", "先不退款了"),
+            ]
+        # 产品推荐/商品咨询
+        elif "产品" in content or "商品" in content or "推荐" in content:
+            buttons = [
+                ("耳机推荐", "推荐一款耳机"),
+                ("手环推荐", "推荐一款智能手环"),
+                ("充电宝推荐", "推荐一个充电宝"),
+            ]
+        # 默认通用入口
+        else:
+            buttons = [
+                ("产品咨询", "我想了解产品"),
+                ("订单查询", "我想查询订单"),
+                ("申请退款", "我想申请退款"),
+            ]
+
+        self._render_quick_buttons(buttons)
 
     # ==================== 入口 ====================
     def run(self):

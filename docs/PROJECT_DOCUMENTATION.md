@@ -1,7 +1,7 @@
 #
 # ChatFlowDSL 课程设计文档（统一版）
 #
-# 本文基于当前代码库（2025-11-19）重新整理，
+# 本文基于当前代码库（2025-11-22）重新整理，
 # 去除了与实现不符的旧描述，并作为课程设计的主文档入口。
 
 ## 目录
@@ -64,7 +64,7 @@
 - **可扩展性**：通过新增 YAML 脚本或扩展 Action 类型即可支持新业务流程。
 - **可维护性**：模块划分清晰，脚本与代码分离；提供独立的 DSL 规范/混合匹配/认证指南。
 
-典型用户场景示例见 `dsl/flows` 中各 YAML 及混合匹配演示脚本 `demo_hybrid_matching.py`。
+典型用户场景示例见 `dsl/flows` 中各 YAML 及混合匹配演示脚本 `tests/demo_hybrid_matching.py`。
 
 ---
 
@@ -78,7 +78,7 @@
 ┌───────────────────────────────────────────────────┐
 │                客户端层 (Client Layer)           │
 │  - 交互客户端：client/client.py                  │
-│  - CLI 本地演示：cli/cli_interface.py            │
+│  - GUI 演示客户端：client/gui_client.py          │
 └───────────────────────────────────────────────────┘
                          ↓ TCP (JSON)
 ┌───────────────────────────────────────────────────┐
@@ -263,12 +263,10 @@ DSL 各字段的完整定义请参考 `docs/DSL_SPECIFICATION.md`。
 pytest
 ```
 
-收集到的主要测试包括：
-- 根目录：
+收集到的主要测试包括（均位于 `tests/` 目录）：
   - `test_api_connection.py`：验证 LLM API 连通性与基本调用。
   - `test_fixes_auto.py`：用于自动修复回归验证。
   - `test_server_llm.py`：服务器侧 LLM 集成的基本连通性测试。
-- `tests/` 目录：
   - `test_authentication.py`：用户认证流程与数据库访问。
   - `test_chatbot_flows.py`：对话流程触发和会话状态保持。
   - `test_colloquial_expressions.py`：口语化表达的匹配验证（混合匹配相关）。
@@ -276,9 +274,10 @@ pytest
   - `test_interpreter.py`：DSL 解释器的基础功能。
   - `test_with_mocks.py`：使用 `tests/mocks.py` 中的 Mock LLM / Mock DB 进行的单元测试。
 
-目前运行结果：
-- 绝大多数测试通过；
-- 与流程状态细节相关的少量用例仍有失败（主要是订单流程的状态 ID 预期），反映的是“测试期望与实现略有偏差”，不影响主流程功能。
+目前运行结果（2025-11-22）：
+- 使用 `pytest` 共收集并运行 59 个测试用例；
+- 全部用例通过（59 passed, 0 failed），仅存在若干 Pytest 警告（例如部分测试函数返回值非 None、并发 Mock 测试中的线程警告），不影响主流程功能；
+- 更详细的结果和分类说明见 `docs/TEST_REPORT.md`。
 
 ### 5.2 测试桩设计
 
@@ -333,9 +332,10 @@ python tests/test_with_mocks.py
 
 ---
 
-**文档版本**：v2.0（统一版）  
-**最后更新**：2025-11-19  
+**文档版本**：v2.1（统一版）  
+**最后更新**：2025-11-22  
 **说明**：本文件取代早期分散的设计/测试说明，测试细节与 DSL/混合匹配/认证的更完整说明，请分别参见：
 - `docs/DSL_SPECIFICATION.md`
 - `docs/HYBRID_MATCHING_GUIDE.md`
 - `docs/AUTHENTICATION_GUIDE.md`
+- `docs/TEST_REPORT.md`

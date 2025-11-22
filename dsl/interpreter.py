@@ -6,23 +6,19 @@ from core.session_manager import Session
 class Interpreter:
     def __init__(self, chat_flow: ChatFlow, llm_responder=None):
         if not isinstance(chat_flow, ChatFlow):
-            raise TypeError("chat_flow must be an instance of ChatFlow")
+            raise TypeError("chat_flow必须是ChatFlow实例")
         self.chat_flow = chat_flow
-        self.llm_responder = llm_responder  # 可选的LLM响应器，用于语义理解
+        self.llm_responder = llm_responder
 
     def process(self, session: Session, user_input: str) -> List[Dict[str, Any]]:
-        """向后兼容的处理方法，仅返回动作列表。"""
+        """处理用户输入，返回动作列表"""
         actions, _ = self.process_with_match(session, user_input)
         return actions
 
     def process_with_match(self, session: Session, user_input: str) -> Tuple[List[Dict[str, Any]], bool]:
         """
-        处理用户输入，并根据当前状态和转换规则决定下一步的动作。
-
-        Returns:
-            (actions, matched)
-            - actions: 下一状态的动作列表，或默认兜底动作
-            - matched: 是否在当前流程中找到匹配的转换（包括兜底转换）
+        处理用户输入，根据当前状态和转换规则决定下一步动作
+        返回: (actions, matched) - actions为动作列表，matched表示是否找到匹配转换
         """
         # 如果 session 没有当前状态 (比如是新 session)，则从流程入口点开始
         if not session.current_state_id:
@@ -79,20 +75,7 @@ class Interpreter:
     def _is_condition_met(self, condition: Optional[Dict[str, Any]], user_input: str, session: Session = None) -> bool:
         """
         检查条件是否满足
-
-        支持的条件类型：
-        1. all: 所有子条件都必须满足
-        2. any: 任一子条件满足即可
-        3. regex: 正则表达式匹配
-        4. variable_equals: 会话变量值比较
-
-        Args:
-            condition: 条件字典
-            user_input: 用户输入
-            session: 会话对象（用于变量比较）
-
-        Returns:
-            True表示条件满足，False表示不满足
+        支持: all(全部满足), any(任一满足), regex(正则), variable_equals(变量比较)
         """
         if condition is None:
             return False
@@ -117,17 +100,7 @@ class Interpreter:
         return self._check_single_rule(condition, user_input, session)
 
     def _check_single_rule(self, rule: Dict[str, Any], user_input: str, session: Session = None) -> bool:
-        """
-        检查单个规则是否满足
-
-        Args:
-            rule: 规则字典
-            user_input: 用户输入
-            session: 会话对象
-
-        Returns:
-            True表示规则满足，False表示不满足
-        """
+        """检查单个规则是否满足"""
         rule_type = rule.get("type")
 
         # 正则表达式匹配（规则优先）

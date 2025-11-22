@@ -565,9 +565,9 @@ chatbot = Chatbot(flows_dir="dsl/flows", llm_responder=None)
 
 ## 📚 相关文档
 
-- [DSL语法规范](DSL_SPECIFICATION.md)
-- [LLM集成指南](llm_usage.md)
-- [项目文档](PROJECT_DOCUMENTATION.md)
+- [DSL 语法规范](DSL_SPECIFICATION.md)
+- [项目设计文档](PROJECT_DOCUMENTATION.md)
+- [实现总结](IMPLEMENTATION_SUMMARY.md)
 - [测试报告](TEST_REPORT.md)
 
 ---

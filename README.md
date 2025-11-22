@@ -4,7 +4,7 @@ ChatFlowDSL 是一个面向智能客服场景的领域特定语言 (DSL) 及其�
 - 用 YAML 定义对话流程（状态机）
 - 规则匹配 + LLM 语义理解的混合触发
 - 基于 TCP 的多客户端并发对话
-- 用户认证 + 数据库查询（订单、商品等）
+- 用户认证（用户名/密码 + 会话 + JWT）+ 数据库查询（订单、商品等）
 
 ## 核心特性
 
@@ -17,7 +17,7 @@ ChatFlowDSL 是一个面向智能客服场景的领域特定语言 (DSL) 及其�
 ## 目录概览
 
 ```
-├── requirements.txt            # Python 依赖
+├── requirements.txt            # Python 依赖（pyyaml / openai / pytest / PyJWT）
 ├── config/
 │   └── config.yaml             # 运行配置（LLM、模式等）
 ├── dsl/
@@ -46,7 +46,7 @@ ChatFlowDSL 是一个面向智能客服场景的领域特定语言 (DSL) 及其�
 │   ├── PROJECT_DOCUMENTATION.md  # 课程设计总文档（最新）
 │   ├── DSL_SPECIFICATION.md      # DSL 语法规范
 │   ├── HYBRID_MATCHING_GUIDE.md  # 混合匹配机制说明
-│   ├── AUTHENTICATION_GUIDE.md   # 用户认证系统说明
+│   ├── AUTHENTICATION_GUIDE.md   # 用户认证与 JWT 鉴权说明
 │   └── IMPLEMENTATION_SUMMARY.md # 关键实现与改造总结
 └── tests/
     ├── demo_authentication.py     # 认证流程演示脚本
@@ -83,6 +83,9 @@ ChatFlowDSL 是一个面向智能客服场景的领域特定语言 (DSL) 及其�
 
    # 终端2：启动客户端
    python client/client.py
+
+   # optimal choice: 启动图形化客户端
+   python client/gui_client.py
    ```
 
 4. 混合匹配演示脚本（需要在 `config/config.yaml` 中配置 LLM）

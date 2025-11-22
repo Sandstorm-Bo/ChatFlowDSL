@@ -464,12 +464,32 @@ class ActionExecutor:
         text = user_input.strip()
         text_lower = text.lower()
 
-        # 1) 尝试根据数字编号或价格选择
-        # 1.1 提取所有连续数字
-        num_match = re.findall(r"\d+", text)
         chosen = None
 
-        if num_match:
+        # 0) 优先尝试根据价格精确匹配，避免“小数点后的 0”干扰编号匹配
+        #    例如：“价格是2419.0的这一款”应优先选中价格为 2419.0 的商品
+        price_tokens = re.findall(r"\d+(?:\.\d+)?", text)
+        for token in price_tokens:
+            try:
+                price_val = float(token)
+            except ValueError:
+                continue
+            for p in results:
+                price = p.get("price")
+                try:
+                    if price is not None and float(price) == price_val:
+                        chosen = p
+                        break
+                except Exception:
+                    continue
+            if chosen:
+                break
+
+        # 1) 若仍未选中，再尝试根据数字编号或价格选择
+        # 1.1 提取所有连续数字
+        num_match = re.findall(r"\d+", text)
+
+        if not chosen and num_match:
             # 优先尝试数字是否出现在商品名称中（如“平板电脑 12”）
             for num in num_match:
                 for p in results:

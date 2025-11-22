@@ -168,17 +168,21 @@ class Chatbot:
             return None
 
     def _detect_intent_flow(self, user_input: str, session: Optional[Session]) -> Tuple[Optional[str], Optional[str]]:
-        """综合使用规则和LLM识别用户意图所属流程，返回(flow_name, source)"""
+        """综合使用规则和LLM识别用户意图所属流程，返回(flow_name, source)
+
+        设计原则：规则优先，LLM兜底。
+        - 若规则已匹配到某个流程，则直接使用规则结果（避免被LLM覆盖）
+        - 若规则无法匹配，再调用LLM进行语义兜底识别
+        """
+        # 1) 先尝试全局规则匹配（遍历所有流程入口触发器）
         rule_flow = self._try_rule_based_trigger(user_input)
-        llm_flow = self._try_llm_based_trigger(user_input, session)
-
-        if llm_flow:
-            if rule_flow and rule_flow != llm_flow:
-                print(f"[意图路由] LLM 结果 '{llm_flow}' 覆盖规则匹配 '{rule_flow}'")
-            return llm_flow, "llm"
-
         if rule_flow:
             return rule_flow, "rule"
+
+        # 2) 规则无法判断时，再调用LLM进行兜底识别
+        llm_flow = self._try_llm_based_trigger(user_input, session)
+        if llm_flow:
+            return llm_flow, "llm"
 
         return None, None
 

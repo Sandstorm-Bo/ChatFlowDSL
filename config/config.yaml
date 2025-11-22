@@ -19,6 +19,13 @@ session:
   timeout: 3600  # 会话超时时间(秒)
   max_history: 50  # 最大历史记录数
 
+# 认证配置（JWT）
+auth:
+  # JWT 密钥：优先从环境变量 CHATFLOW_JWT_SECRET 读取，未配置时使用此处的值（开发环境请修改为随机字符串）
+  jwt_secret: "dev-secret-change-me"
+  # Token 有效期（小时）
+  jwt_exp_hours: 24
+
 # 日志配置
 logging:
   level: "INFO"  # DEBUG / INFO / WARNING / ERROR

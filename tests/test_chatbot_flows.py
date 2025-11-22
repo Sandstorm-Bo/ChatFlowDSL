@@ -73,5 +73,28 @@ class TestLLMIntentFlowSelection(unittest.TestCase):
             self.assertEqual(session.get("active_flow_name"), flow_name)
 
 
+class TestProductSelectionByPrice(unittest.TestCase):
+    def test_select_product_by_price_uses_correct_item(self):
+        """用户用价格描述商品时，应选中对应价格的商品（例如 2419 元的平板电脑 12）。"""
+        llm = _QueueLLMResponder()
+        chatbot = Chatbot(llm_responder=llm)
+        # 始终将意图路由到“售前产品咨询流程”
+        llm.set_next_intent(chatbot.flow_intents["售前产品咨询流程"])
+        session_id = "session-price-select"
+
+        # 进入售前产品咨询流程，展示推荐商品
+        chatbot.handle_message(session_id, "查询商品")
+        # 触发平板电脑搜索，产生包含 2419.0 价格的结果
+        chatbot.handle_message(session_id, "有卖平板电脑的吗")
+        # 用户通过价格描述指定商品
+        chatbot.handle_message(session_id, "价格是2419.0的这一款")
+        # 请求查看具体信息，应展示价格为 2419.0 的平板电脑 12
+        responses = chatbot.handle_message(session_id, "具体信息")
+        text = "\n".join(responses)
+
+        self.assertIn("平板电脑 12", text)
+        self.assertIn("¥2419.0", text)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -27,7 +27,7 @@ states:
       - condition:
           all:
             - type: regex
-              value: "[A-Z0-9]{10,}"
+              value: "[A-Z0-9]{8,12}"
         target: "state_verify_order_for_invoice"
       - target: "state_invalid_order_format"
 
@@ -42,7 +42,7 @@ states:
     actions:
       - type: extract_variable
         source: user_input
-        regex: "(?P<order_id>[A-Z0-9]{10,})"
+        regex: "(?P<order_id>[A-Z0-9]{8,12})"
         target: "session.order_id"
       - type: api_call
         endpoint: "database://invoices/check_eligibility"

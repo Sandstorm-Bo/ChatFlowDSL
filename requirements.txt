@@ -1,12 +1,4 @@
 pyyaml
-langdetect
 openai
-dashscope
-rich
 pytest
-bcrypt
 PyJWT
-prometheus-client
-pytest-cov
-pytest-asyncio
-

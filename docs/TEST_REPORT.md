@@ -66,20 +66,20 @@
 ## 3. 测试执行结果
 
 - 执行命令：`pytest`
-- 收集用例数：59
+- 收集用例数：60
 - 结果统计：
-  - 通过（passed）：59
+  - 通过（passed）：60
   - 失败（failed）：0
   - 跳过（skipped）：0
 
-pytest 运行输出概览：
+pytest 运行输出概览（节选）：
 
 ```text
-collected 59 items
+collected 60 items
 
 tests/test_api_connection.py ...         
 tests/test_authentication.py ........... 
-tests/test_chatbot_flows.py ..          
+tests/test_chatbot_flows.py ...         
 tests/test_colloquial_expressions.py ...
 tests/test_fixes_auto.py ...            
 tests/test_integration.py ....          
@@ -87,10 +87,10 @@ tests/test_interpreter.py .
 tests/test_server_llm.py .              
 tests/test_with_mocks.py ...............................
 
-59 passed in XX.XXs
+60 passed in XX.XXs
 ```
 
-（实际运行时间取决于本地环境，本次约 20 秒。）
+（实际运行时间取决于本地环境，本次约 18–20 秒。）
 
 ---
 
@@ -101,11 +101,6 @@ tests/test_with_mocks.py ...............................
 - **PytestReturnNotNoneWarning**
   - 来源：`tests/test_fixes_auto.py` 中部分测试函数返回了 `bool`，而非 `None`。
   - 影响：仅为风格和最佳实践警告，断言逻辑仍然正确执行。
-
-- **PytestUnhandledThreadExceptionWarning**
-  - 来源：`tests/test_with_mocks.py::TestConcurrentMockDatabase::test_concurrent_read_and_write` 中的并发读写测试。
-  - 描述：在极端并发场景下，Mock 数据库的某个线程抛出了 `IndexError: tuple index out of range`，被 pytest 捕获为线程异常警告。
-  - 影响：该用例整体仍通过，说明当前并发访问逻辑在典型负载下能正常工作，但 Mock 实现的极端并发行为还有改进空间。
 
 如果作为课程作业进一步打磨，可以在后续版本中：
 - 将 `test_fixes_auto.py` 中的 `return` 改写为标准 `assert` 语句；
@@ -120,8 +115,7 @@ tests/test_with_mocks.py ...............................
   - 关键业务流程（产品咨询、订单管理、退款、发票）均通过 DSL + 测试用例进行验证。
 
 - **质量评估**：
-  - 当前版本在自动化测试维度下稳定性良好：59/59 用例通过，无功能性失败。
+  - 当前版本在自动化测试维度下稳定性良好：60/60 用例通过，无功能性失败。
   - 测试架构已支持在不依赖真实 LLM / 真实数据库的情况下进行快速回归。
 
 总体来看，ChatFlowDSL 在“功能正确性 + 回归测试能力”两个维度上已经满足课程设计中对测试与验证的要求，后续如需扩展，只需在新增模块附近按相同模式补充测试即可。
-

@@ -40,6 +40,7 @@ class ChatClient:
         self.authenticated = False
         self.user_id = None
         self.username = None
+        self.token = None  # 可选的 JWT 令牌
 
     def connect(self, auto_auth: bool = True):
         """连接到服务器
@@ -157,6 +158,8 @@ class ChatClient:
                         self.authenticated = True
                         self.user_id = auth_result.get("user_id")
                         self.username = auth_result.get("username")
+                        # 可选：保存服务器下发的 JWT，用于后续鉴权
+                        self.token = auth_result.get("token")
                         print(f"[{self.client_name}] {auth_result.get('message')}")
                         return True
                     else:
@@ -245,6 +248,8 @@ class ChatClient:
                     self.authenticated = True
                     self.user_id = register_result.get("user_id")
                     self.username = register_result.get("username")
+                    # 保存 JWT（如果服务器返回）
+                    self.token = register_result.get("token")
                     print(f"[{self.client_name}] {register_result.get('message')}")
                     return True
                 else:
@@ -285,6 +290,9 @@ class ChatClient:
                 "type": "message",
                 "content": content
             }
+            # 如果已拿到 JWT，则一并发送，服务器可用其进行鉴权
+            if self.token:
+                request["token"] = self.token
 
             # 发送JSON消息
             data = json.dumps(request, ensure_ascii=False).encode('utf-8')

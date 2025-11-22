@@ -10,6 +10,8 @@ import json
 import sys
 import os
 import yaml
+import datetime
+import jwt
 
 # 添加项目根目录到Python路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -52,6 +54,10 @@ class ChatServer:
         self.clients = {}  # 存储活跃的客户端连接 {session_id: (conn, addr)}
         self.authenticated_users = {}  # 存储已认证的用户 {session_id: user_id}
         self.clients_lock = threading.Lock()  # 保护客户端字典的线程锁
+
+        # 初始化 JWT 配置
+        self.jwt_secret, self.jwt_exp_hours = self._init_jwt_config()
+        self.jwt_algorithm = "HS256"
 
         print(f"[服务器] 初始化完成")
         print(f"[服务器] 已加载 {len(self.chatbot.flows)} 个业务流程")
@@ -110,6 +116,66 @@ class ChatServer:
             print(f"[服务器] 初始化LLM响应器失败: {e}")
             print(f"[服务器] 将以纯规则模式运行")
             return None
+
+    def _init_jwt_config(self):
+        """
+        从配置文件和环境变量初始化 JWT 配置。
+
+        优先级：环境变量 CHATFLOW_JWT_SECRET > config.yaml 中的 auth.jwt_secret > 默认值。
+        """
+        secret = os.getenv("CHATFLOW_JWT_SECRET")
+        exp_hours = 24
+
+        try:
+            config_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                "config",
+                "config.yaml",
+            )
+            if os.path.exists(config_path):
+                with open(config_path, "r", encoding="utf-8") as f:
+                    config = yaml.safe_load(f) or {}
+                auth_cfg = config.get("auth", {}) or {}
+                if not secret:
+                    secret = auth_cfg.get("jwt_secret")
+                exp_hours = int(auth_cfg.get("jwt_exp_hours", exp_hours))
+        except Exception as e:
+            print(f"[服务器] 初始化 JWT 配置时出错: {e}")
+
+        if not secret:
+            secret = "dev-secret-change-me"
+            print("[服务器] 警告: 未配置 JWT 密钥，使用默认开发密钥，请在生产环境中修改 config.yaml 或设置 CHATFLOW_JWT_SECRET")
+
+        print(f"[服务器] JWT 已启用，有效期 {exp_hours} 小时")
+        return secret, exp_hours
+
+    def _generate_jwt(self, user_id: str, username: str) -> str | None:
+        """为已认证用户生成 JWT Token。"""
+        try:
+            payload = {
+                "user_id": user_id,
+                "username": username,
+                "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=self.jwt_exp_hours),
+            }
+            token = jwt.encode(payload, self.jwt_secret, algorithm=self.jwt_algorithm)
+            return token
+        except Exception as e:
+            print(f"[服务器] 生成 JWT 失败: {e}")
+            return None
+
+    def _verify_jwt(self, token: str):
+        """验证客户端提交的 JWT Token，返回(user_id, payload) 或 (None, None)。"""
+        try:
+            payload = jwt.decode(token, self.jwt_secret, algorithms=[self.jwt_algorithm])
+            user_id = payload.get("user_id")
+            return user_id, payload
+        except jwt.ExpiredSignatureError:
+            print("[服务器] JWT 已过期")
+        except jwt.InvalidTokenError as e:
+            print(f"[服务器] 无效的 JWT: {e}")
+        except Exception as e:
+            print(f"[服务器] 验证 JWT 时出错: {e}")
+        return None, None
 
     def start(self):
         """启动服务器，开始监听客户端连接"""
@@ -221,13 +287,17 @@ class ChatServer:
                             with self.clients_lock:
                                 self.authenticated_users[session_id] = user_id
 
+                            token = self._generate_jwt(user_id, user_data["username"])
+
                             response = {
                                 "type": "auth_result",
                                 "success": True,
                                 "user_id": user_id,
                                 "username": user_data["username"],
-                                "message": f"登录成功！欢迎您，{user_data['username']}！"
+                                "message": f"登录成功！欢迎您，{user_data['username']}！",
                             }
+                            if token:
+                                response["token"] = token
                             print(f"[线程-{session_id}] 用户 {username} 登录成功，user_id={user_id}")
                         else:
                             # 认证失败
@@ -259,13 +329,17 @@ class ChatServer:
                             with self.clients_lock:
                                 self.authenticated_users[session_id] = user_id
 
+                            token = self._generate_jwt(user_id, username)
+
                             response = {
                                 "type": "register_result",
                                 "success": True,
                                 "user_id": user_id,
                                 "username": username,
-                                "message": result["message"]
+                                "message": result["message"],
                             }
+                            if token:
+                                response["token"] = token
                             print(f"[线程-{session_id}] 用户 {username} 注册成功，user_id={user_id}")
                         else:
                             # 注册失败
@@ -280,7 +354,16 @@ class ChatServer:
 
                     elif request.get("type") == "message":
                         # 普通对话消息 - 需要先认证
-                        user_id = self.authenticated_users.get(session_id)
+                        user_id = None
+
+                        # 1) 尝试从 JWT 中获取 user_id
+                        token = request.get("token")
+                        if token:
+                            user_id, _ = self._verify_jwt(token)
+
+                        # 2) 若无有效 JWT，则退回到基于 session_id 的认证表
+                        if not user_id:
+                            user_id = self.authenticated_users.get(session_id)
 
                         if not user_id:
                             # 未认证，要求登录

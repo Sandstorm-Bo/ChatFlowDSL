@@ -179,7 +179,7 @@
 - 商品查询：`get_product(product_id)` / `list_products(category)`。
 - 订单查询：`get_order(order_id)` / `list_user_orders(user_id)`。
 
-认证系统的更详细设计与表结构请见 `docs/AUTHENTICATION_GUIDE.md`。
+认证系统（用户名/密码 + 会话 + JWT 鉴权）的更详细设计与表结构请见 `docs/AUTHENTICATION_GUIDE.md`。
 
 ---
 
@@ -201,13 +201,18 @@
      "success": true,
      "user_id": "U001",
      "username": "张三",
-     "message": "登录成功"
+     "message": "登录成功",
+     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."   // 可选，JWT
    }
    ```
 
 3. 普通消息
    ```json
-   { "type": "message", "content": "用户输入的文本" }
+   {
+     "type": "message",
+     "content": "用户输入的文本",
+     "token": "可选，已登录用户的JWT"
+   }
    ```
 
 4. 服务器响应
@@ -275,8 +280,8 @@ pytest
   - `test_with_mocks.py`：使用 `tests/mocks.py` 中的 Mock LLM / Mock DB 进行的单元测试。
 
 目前运行结果（2025-11-22）：
-- 使用 `pytest` 共收集并运行 59 个测试用例；
-- 全部用例通过（59 passed, 0 failed），仅存在若干 Pytest 警告（例如部分测试函数返回值非 None、并发 Mock 测试中的线程警告），不影响主流程功能；
+- 使用 `pytest` 共收集并运行 60 个测试用例；
+- 全部用例通过（60 passed, 0 failed），仅存在若干 Pytest 警告（例如部分测试函数返回值非 None），不影响主流程功能；
 - 更详细的结果和分类说明见 `docs/TEST_REPORT.md`。
 
 ### 5.2 测试桩设计
